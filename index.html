@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stocking Tears — Web 3D 实时布料撕裂与脱袜模拟</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- Top-center Mode Switcher -->
+  <div class="mode-bar">
+    <button id="btn-mode-challenge" class="mode-btn">闯关模式 (3关)</button>
+    <button id="btn-mode-tear" class="mode-btn active">撕裂 / 勾丝</button>
+    <button id="btn-mode-roll" class="mode-btn">脱袜子 / 卷边</button>
+  </div>
+
+  <!-- Stage Challenge HUD (visible only in Challenge Mode) -->
+  <div id="challenge-hud" class="challenge-hud hidden">
+    <div class="stage-steps">
+      <span id="step-1" class="stage-pill active">1. 脱短袜</span>
+      <span class="stage-arrow">→</span>
+      <span id="step-2" class="stage-pill">2. 褪丝袜</span>
+      <span class="stage-arrow">→</span>
+      <span id="step-3" class="stage-pill">3. 解蝴蝶结</span>
+    </div>
+    <div id="challenge-goal" class="challenge-goal">第 1 关：向下拖拽褪下左右腿的针织短袜</div>
+    <div class="challenge-progress-row">
+      <div class="progress-track">
+        <div id="challenge-progress-fill" class="progress-fill"></div>
+      </div>
+      <span id="challenge-progress-text" class="progress-text">0%</span>
+      <button id="btn-challenge-restart" class="mini-btn">重玩</button>
+    </div>
+  </div>
+
+  <!-- Top-right minimal settings & GLB import -->
+  <div class="top-controls">
+    <button id="btn-toggle-audio" class="pill-btn" title="开启 / 关闭物理音效">
+      <span>🔊 音效</span>
+    </button>
+    <button id="btn-toggle-panel" class="pill-btn" title="展开材质与物理参数面板">
+      <span>材质参数 Inspector</span>
+    </button>
+    <label class="pill-btn file-btn" title="导入自定义 .glb 3D 模型">
+      <span>导入 .glb</span>
+      <input id="glb-file-input" type="file" accept=".glb,.gltf" hidden />
+    </label>
+    <button id="btn-reset-model" class="pill-btn hidden" title="恢复内置模型">
+      <span>内置模型</span>
+    </button>
+  </div>
+
+  <!-- Unity-Inspector style material & physics parameter panel -->
+  <div id="settings-panel" class="settings-panel hidden">
+    <div class="preset-row">
+      <button class="preset-chip" data-preset="matteBlack">哑光黑丝</button>
+      <button class="preset-chip" data-preset="pearlBlack">油亮珠光</button>
+      <button class="preset-chip" data-preset="sheer20d">极薄 20D</button>
+      <button class="preset-chip" data-preset="milkWhite">纯欲白丝</button>
+    </div>
+
+    <!-- Group 1: 编织与法线 -->
+    <details open class="inspector-group">
+      <summary>编织与法线 (Weave &amp; Normal)</summary>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-weave-tiling">Weave Tiling</label><span id="val-weave-tiling">12</span></div>
+        <input id="sl-weave-tiling" type="range" min="4" max="28" step="0.5" value="12" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-weave-normal">Weave Normal Strength</label><span id="val-weave-normal">0.85</span></div>
+        <input id="sl-weave-normal" type="range" min="0" max="1.6" step="0.02" value="0.85" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-weave-contrast">Weave Contrast</label><span id="val-weave-contrast">0.05</span></div>
+        <input id="sl-weave-contrast" type="range" min="0" max="0.25" step="0.005" value="0.05" />
+      </div>
+    </details>
+
+    <!-- Group 2: 张力与褶皱 -->
+    <details open class="inspector-group">
+      <summary>张力与褶皱 (Tension &amp; Wrinkles)</summary>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-wrinkle">Wrinkle Strength</label><span id="val-wrinkle">1.20</span></div>
+        <input id="sl-wrinkle" type="range" min="0" max="2.5" step="0.05" value="1.2" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-tension-boost">Tension Normal Boost</label><span id="val-tension-boost">1.50</span></div>
+        <input id="sl-tension-boost" type="range" min="0" max="3.0" step="0.05" value="1.5" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="slider-tear">Tear Sensitivity (撕裂灵敏度)</label><span id="val-tear">1.00</span></div>
+        <input id="slider-tear" type="range" min="0.4" max="2.0" step="0.05" value="1.0" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="slider-bulge">Skin Bulge (破口皮肤隆起)</label><span id="val-bulge">1.00</span></div>
+        <input id="slider-bulge" type="range" min="0" max="2.0" step="0.05" value="1.0" />
+      </div>
+    </details>
+
+    <!-- Group 3: 珠光与闪点 -->
+    <details open class="inspector-group">
+      <summary>珠光与闪点 (Pearl &amp; Glint)</summary>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-pearl-strength">Pearl Strength</label><span id="val-pearl-strength">0.42</span></div>
+        <input id="sl-pearl-strength" type="range" min="0" max="1.2" step="0.02" value="0.42" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-pearl-scale">Pearl Grain Scale</label><span id="val-pearl-scale">540</span></div>
+        <input id="sl-pearl-scale" type="range" min="180" max="900" step="10" value="540" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-pearl-spec">Pearl Specular Strength</label><span id="val-pearl-spec">0.64</span></div>
+        <input id="sl-pearl-spec" type="range" min="0" max="1.5" step="0.02" value="0.64" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-pearl-edge">Pearl Edge Strength</label><span id="val-pearl-edge">0.16</span></div>
+        <input id="sl-pearl-edge" type="range" min="0" max="0.8" step="0.02" value="0.16" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-glint-strength">Pearl Glint Strength</label><span id="val-glint-strength">0.85</span></div>
+        <input id="sl-glint-strength" type="range" min="0" max="2.0" step="0.05" value="0.85" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-glint-density">Pearl Glint Density</label><span id="val-glint-density">0.12</span></div>
+        <input id="sl-glint-density" type="range" min="0.02" max="0.45" step="0.01" value="0.12" />
+      </div>
+    </details>
+
+    <!-- Group 4: 雾面与透肤 -->
+    <details open class="inspector-group">
+      <summary>雾面与透肤 (Frost &amp; Sheerness)</summary>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-frost-cov">Frost Body Coverage</label><span id="val-frost-cov">0.78</span></div>
+        <input id="sl-frost-cov" type="range" min="0.15" max="1.0" step="0.02" value="0.78" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-frost-clear">Frost Clear At Stretch</label><span id="val-frost-clear">1.00</span></div>
+        <input id="sl-frost-clear" type="range" min="0" max="1.6" step="0.05" value="1.0" />
+      </div>
+      <div class="panel-row">
+        <div class="row-head"><label for="sl-frost-smooth">Frost Matte Smoothness</label><span id="val-frost-smooth">0.82</span></div>
+        <input id="sl-frost-smooth" type="range" min="0.1" max="1.0" step="0.02" value="0.82" />
+      </div>
+    </details>
+  </div>
+
+  <!-- Status toast -->
+  <div id="status-toast" class="status-toast hidden"></div>
+
+  <!-- Bottom-left: VIEW 01 / VIEW 02 + Key hints -->
+  <div class="bottom-left">
+    <div class="view-buttons">
+      <button id="btn-view-01" class="demo-btn active">VIEW 01</button>
+      <button id="btn-view-02" class="demo-btn">VIEW 02</button>
+    </div>
+    <div class="key-hints">
+      <div class="hint-line">
+        <span class="hint-item" id="hint-pin"><kbd>1</kbd> 固定 / 松开手部</span>
+        <span class="hint-item" id="hint-repair"><kbd>2</kbd> 还原破损 / 穿回</span>
+      </div>
+      <div class="hint-line sub">
+        <span class="hint-item"><kbd>1</kbd> Pin / release hand</span>
+        <span class="hint-item"><kbd>2</kbd> Repair &amp; pull up</span>
+      </div>
+      <div class="hint-line sub">
+        <span class="hint-item"><kbd>1</kbd> 手の固定・解除</span>
+        <span class="hint-item"><kbd>2</kbd> 破れを修復</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom-right: Black / white color toggle -->
+  <div class="bottom-right">
+    <button id="btn-color-black" class="color-btn black active">Black</button>
+    <button id="btn-color-white" class="color-btn white">white</button>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
