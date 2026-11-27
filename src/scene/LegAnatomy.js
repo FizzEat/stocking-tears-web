@@ -106,7 +106,21 @@ export function getLegSurfaceOffset(side, y, theta, out = { dx: 0, dz: 0 }) {
   // 6. Front quadriceps gentle fullness
   const quadFront = 0.012 * gaussian(y, 0.14, 0.30) * Math.pow(Math.max(0, sinT), 2.0);
 
-  const radialMod = patella + kneeHollow + calfBackBulge + outerThigh + innerPress + quadFront + ankleBone;
+  // 7. Subtle front shinbone (tibia) contour & tapered Achilles tendon behind lower ankle
+  const shinRidge = 0.005 * gaussian(y, -1.05, 0.32) * Math.pow(Math.max(0, sinT), 5.0);
+  const achillesHollow =
+    -0.009 * gaussian(y, -1.42, 0.14) * Math.pow(Math.max(0, -sinT), 1.6) * (1.0 - Math.pow(Math.max(0, -sinT), 4.0));
+
+  const radialMod =
+    patella +
+    kneeHollow +
+    calfBackBulge +
+    outerThigh +
+    innerPress +
+    quadFront +
+    ankleBone +
+    shinRidge +
+    achillesHollow;
 
   out.dx = (rx + radialMod) * cosT;
   out.dz = (rz + radialMod) * sinT;

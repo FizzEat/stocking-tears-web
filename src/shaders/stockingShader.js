@@ -256,18 +256,24 @@ export function createStockingMaterial() {
         float fresnel = pow(1.0 - ndv, 1.85);
         float grazing = pow(1.0 - ndv, 3.3);
 
-        // 3. Pearl & Glint Sparkles (Group 3)
-        vec2 grainCell = floor(vUv * vec2(uPearlGrainScale * 0.75, uPearlGrainScale));
+        // 3. Isotropic Pinpoint Pearl & Glint Sparkles (Group 3 — crisp circular star-points!)
+        vec2 glintUv = vec2(vUv.x * uPearlGrainScale * 0.42, vUv.y * uPearlGrainScale * 1.38);
+        vec2 grainCell = floor(glintUv);
+        vec2 grainFrac = fract(glintUv);
         vec2 grainRnd = hash22(grainCell);
-        vec3 microN = normalize(Np + T * (grainRnd.x - 0.5) * 0.55 + B * (grainRnd.y - 0.5) * 0.55);
+        // Pinpoint circular dot inside cell so sparkles are never stretched dashes
+        vec2 dotCenter = 0.25 + 0.50 * grainRnd;
+        float dotShape = smoothstep(0.24, 0.04, length(grainFrac - dotCenter));
+
+        vec3 microN = normalize(Np + T * (grainRnd.x - 0.5) * 0.52 + B * (grainRnd.y - 0.5) * 0.52);
         vec3 Hkey = normalize(uKeyLightDir + V);
         vec3 Hrim = normalize(uRimLightDir + V);
         float glintSpec = max(
-          pow(max(dot(microN, Hkey), 0.0), 52.0),
-          pow(max(dot(microN, Hrim), 0.0), 38.0) * 0.85
+          pow(max(dot(microN, Hkey), 0.0), 46.0),
+          pow(max(dot(microN, Hrim), 0.0), 34.0) * 0.85
         );
-        float glintGate = step(1.0 - uPearlGlintDensity, grainRnd.x * 0.6 + grainRnd.y * 0.4);
-        float pearlGlint = glintGate * glintSpec * uPearlGlintStrength * (0.40 + 0.60 * fresnel);
+        float glintGate = step(1.0 - uPearlGlintDensity, grainRnd.x * 0.58 + grainRnd.y * 0.42);
+        float pearlGlint = dotShape * glintGate * glintSpec * uPearlGlintStrength * (0.45 + 0.55 * fresnel);
 
         float pearlSpec = pow(max(dot(Np, Hkey), 0.0), mix(14.0, 42.0, uFrostMatteSmoothness)) * uPearlSpecularStrength;
         float pearlEdge = pow(1.0 - ndv, 2.2) * uPearlEdgeStrength;
