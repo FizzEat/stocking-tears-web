@@ -16,9 +16,10 @@ import * as THREE from 'three';
  */
 
 export const LEG_Y_TOP = 0.72;
-export const LEG_Y_BOTTOM = -1.48;
+export const LEG_Y_BOTTOM = -1.56;
 export const STOCKING_Y_TOP = 0.66;
-export const STOCKING_Y_BOTTOM = -1.44;
+export const STOCKING_Y_BOTTOM = -1.562;
+export const FLOOR_Y = -1.685;
 
 function smoothstep(edge0, edge1, x) {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
@@ -64,13 +65,17 @@ export function getLegSurfaceOffset(side, y, theta, out = { dx: 0, dz: 0 }) {
   // Normalized height t: 0 at bottom (-1.48), 1 at top (+0.72)
   const t = Math.max(0, Math.min(1, (y - LEG_Y_BOTTOM) / (LEG_Y_TOP - LEG_Y_BOTTOM)));
 
-  // Base radius profile from ankle -> calf -> knee -> mid-thigh -> upper-thigh
+  // Base radius profile from slender ankle -> calf -> knee -> mid-thigh -> upper-thigh
   const baseR =
-    0.092 +
-    0.118 * Math.pow(t, 1.38) +
+    0.072 +
+    0.136 * Math.pow(t, 1.32) +
     0.026 * gaussian(y, 0.38, 0.34) + // soft upper thigh fullness
-    0.024 * gaussian(y, -0.82, 0.28) - // calf muscle fullness
-    0.014 * gaussian(y, -0.36, 0.16); // slight slimmer knee waist
+    0.032 * gaussian(y, -0.84, 0.25) - // calf muscle fullness
+    0.015 * gaussian(y, -0.36, 0.16) - // slight slimmer knee waist
+    0.008 * gaussian(y, -1.42, 0.12); // graceful slender ankle above malleolus
+
+  // Subtle ankle bone (malleolus) width flare near y = -1.52
+  const ankleBone = 0.006 * gaussian(y, -1.52, 0.045) * Math.pow(Math.abs(Math.cos(theta)), 2.0);
 
   // Elliptical aspect (thighs are slightly deeper front-to-back than side-to-side)
   const rxScale = 0.94 + 0.06 * smoothstep(-0.3, 0.6, y);
@@ -101,7 +106,7 @@ export function getLegSurfaceOffset(side, y, theta, out = { dx: 0, dz: 0 }) {
   // 6. Front quadriceps gentle fullness
   const quadFront = 0.012 * gaussian(y, 0.14, 0.30) * Math.pow(Math.max(0, sinT), 2.0);
 
-  const radialMod = patella + kneeHollow + calfBackBulge + outerThigh + innerPress + quadFront;
+  const radialMod = patella + kneeHollow + calfBackBulge + outerThigh + innerPress + quadFront + ankleBone;
 
   out.dx = (rx + radialMod) * cosT;
   out.dz = (rz + radialMod) * sinT;

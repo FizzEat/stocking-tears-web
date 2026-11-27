@@ -7,6 +7,7 @@ import {
   evaluateLegPoint,
   projectPointOutsideLeg,
 } from '../scene/LegAnatomy.js';
+import { MAX_SDF_TEARS } from '../shaders/stockingShader.js';
 
 const CLEARANCE = 0.0038;
 const MAX_FRAY_STRANDS = 320;
@@ -51,6 +52,7 @@ export class TearableStocking {
     this.quadAlive = new Uint8Array(this.numQuads);
     this.hasAnyTear = false;
     this.indicesDirty = false;
+    this.sdfTears = []; // Analytical per-pixel almond tears + vertical ladders
 
     this.frayStrands = [];
 
@@ -244,42 +246,98 @@ export class TearableStocking {
   }
 
   _rebuildIndexBuffer() {
+    // Keep all cloth triangles intact so the per-pixel analytical almond SDF in
+    // stockingShader.js cuts infinite-resolution, razor-smooth openings with zero blockiness!
     let ptr = 0;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        // Keep boundary quads rendered so fragment shader cuts smooth organic curved edges!
-        // Only collapse quads whose 4 corners are all completely inside an open tear.
-        const o0 = this.tearOpen[this._pIdx(c, r)];
-        const o1 = this.tearOpen[this._pIdx(c + 1, r)];
-        const o2 = this.tearOpen[this._pIdx(c, r + 1)];
-        const o3 = this.tearOpen[this._pIdx(c + 1, r + 1)];
-        const fullyHidden = o0 >= 0.99 && o1 >= 0.99 && o2 >= 0.99 && o3 >= 0.99;
-
-        if (!fullyHidden) {
-          const a = this._vIdx(c, r);
-          const b = this._vIdx(c + 1, r);
-          const d = this._vIdx(c, r + 1);
-          const e = this._vIdx(c + 1, r + 1);
-          this.indexArray[ptr++] = a;
-          this.indexArray[ptr++] = d;
-          this.indexArray[ptr++] = b;
-          this.indexArray[ptr++] = b;
-          this.indexArray[ptr++] = d;
-          this.indexArray[ptr++] = e;
-        } else {
-          this.indexArray[ptr++] = 0;
-          this.indexArray[ptr++] = 0;
-          this.indexArray[ptr++] = 0;
-          this.indexArray[ptr++] = 0;
-          this.indexArray[ptr++] = 0;
-          this.indexArray[ptr++] = 0;
-        }
+        const a = this._vIdx(c, r);
+        const b = this._vIdx(c + 1, r);
+        const d = this._vIdx(c, r + 1);
+        const e = this._vIdx(c + 1, r + 1);
+        this.indexArray[ptr++] = a;
+        this.indexArray[ptr++] = d;
+        this.indexArray[ptr++] = b;
+        this.indexArray[ptr++] = b;
+        this.indexArray[ptr++] = d;
+        this.indexArray[ptr++] = e;
       }
     }
     if (this.geometry && this.geometry.index) {
       this.geometry.index.needsUpdate = true;
     }
     this.indicesDirty = false;
+  }
+
+  _syncSdfTearUniforms() {
+    const uniforms = this.material.uniforms;
+    if (!uniforms || !uniforms.uTearData) return;
+    const count = Math.min(this.sdfTears.length, MAX_SDF_TEARS);
+    uniforms.uTearCount.value = count;
+    for (let i = 0; i < MAX_SDF_TEARS; i++) {
+      if (i < count) {
+        const t = this.sdfTears[i];
+        uniforms.uTearData.value[i].set(t.u, t.v, t.rx, t.ry);
+        uniforms.uTearLadder.value[i].set(t.ladderUp, t.ladderDown, 0, 1);
+      } else {
+        uniforms.uTearData.value[i].set(-10, -10, 0.01, 0.01);
+        uniforms.uTearLadder.value[i].set(0, 0, 0, 0);
+      }
+    }
+  }
+
+  _registerSdfTearAtQuad(qIdx) {
+    const r0 = Math.floor(qIdx / this.cols);
+    const c0 = qIdx % this.cols;
+    const u = (c0 + 0.5) / this.cols;
+    const v = (r0 + 0.5) / this.rows;
+
+    // Check if an existing SDF tear is close -> grow it & optionally chain a vertical secondary oval!
+    for (let i = 0; i < this.sdfTears.length; i++) {
+      const t = this.sdfTears[i];
+      let du = Math.abs(u - t.u);
+      if (du > 0.5) du = 1.0 - du;
+      const dv = Math.abs(v - t.v);
+
+      if (du < 0.065 && dv < 0.08) {
+        t.rx = Math.min(0.038, t.rx + 0.0032);
+        t.ry = Math.min(0.056, t.ry + 0.0052);
+        t.ladderUp = Math.min(0.24, t.ladderUp + 0.016);
+        t.ladderDown = Math.min(0.24, t.ladderDown + 0.016);
+
+        // Spawn a chained secondary smaller oval hole along the vertical ladder!
+        if (t.ry > 0.044 && !t.chained && this.sdfTears.length < MAX_SDF_TEARS) {
+          t.chained = true;
+          const dir = Math.random() < 0.5 ? 1 : -1;
+          const v2 = Math.max(0.06, Math.min(0.92, t.v + dir * (t.ry * 1.95 + 0.032)));
+          this.sdfTears.push({
+            u: t.u + (Math.random() - 0.5) * 0.006,
+            v: v2,
+            rx: t.rx * (0.58 + Math.random() * 0.18),
+            ry: t.ry * (0.62 + Math.random() * 0.2),
+            ladderUp: 0.06 + Math.random() * 0.06,
+            ladderDown: 0.06 + Math.random() * 0.06,
+            chained: false,
+          });
+        }
+        this._syncSdfTearUniforms();
+        return;
+      }
+    }
+
+    // Spawn a brand-new sleek almond tear with vertical needle-tapered sheer ladder!
+    if (this.sdfTears.length < MAX_SDF_TEARS) {
+      this.sdfTears.push({
+        u,
+        v,
+        rx: 0.022 + Math.random() * 0.008,
+        ry: 0.034 + Math.random() * 0.012,
+        ladderUp: 0.085 + Math.random() * 0.065,
+        ladderDown: 0.085 + Math.random() * 0.065,
+        chained: false,
+      });
+      this._syncSdfTearUniforms();
+    }
   }
 
   _updateTearEdgeFlags() {
@@ -391,6 +449,8 @@ export class TearableStocking {
     this.targetCuffY = STOCKING_Y_TOP;
     this.rollGripActive = false;
     this.frayStrands = [];
+    this.sdfTears = [];
+    this._syncSdfTearUniforms();
     this.hasAnyTear = false;
     this.pos.set(this.restPos);
     this.prevPos.set(this.restPos);
@@ -679,11 +739,13 @@ export class TearableStocking {
     if (q1 >= 0 && this.quadAlive[q1]) {
       this.quadAlive[q1] = 0;
       this._spawnVerticalLadder(q1);
+      this._registerSdfTearAtQuad(q1);
       this.indicesDirty = true;
     }
     if (q2 >= 0 && this.quadAlive[q2]) {
       this.quadAlive[q2] = 0;
       this._spawnVerticalLadder(q2);
+      this._registerSdfTearAtQuad(q2);
       this.indicesDirty = true;
     }
 
@@ -837,10 +899,31 @@ export class TearableStocking {
       for (let c = 0; c <= cols; c++) {
         const vIdx = r * stride + c;
         const cc = c % this.cols;
+        const uSkin = c / cols;
         const pCenter = this._pIdx(cc, cr);
-        const openVal = this.tearOpen[pCenter];
 
-        if (openVal > 0.01) {
+        // Evaluate exact analytical almond SDF for raised skin inside openings
+        let maxBulge = 0.0;
+        let maxRim = 0.0;
+        for (let k = 0; k < this.sdfTears.length; k++) {
+          const t = this.sdfTears[k];
+          let du = uSkin - t.u;
+          if (du > 0.5) du -= 1.0;
+          if (du < -0.5) du += 1.0;
+          const dv = vCloth - t.v;
+          const ny = dv / Math.max(t.ry, 0.006);
+          if (Math.abs(ny) > 1.35) continue;
+          const nx = du / Math.max(t.rx, 0.004);
+          const d = Math.hypot(nx, ny);
+          if (d < 1.25) {
+            const b = Math.max(0, 1.0 - d * d);
+            if (b > maxBulge) maxBulge = b;
+            const rim = Math.exp(-Math.pow((d - 1.0) / 0.16, 2.0));
+            if (rim > maxRim) maxRim = rim;
+          }
+        }
+
+        if (maxBulge > 0.005 || maxRim > 0.005) {
           const pL = this._pIdx(cc - 1, cr);
           const pR = this._pIdx(cc + 1, cr);
           const pU = this._pIdx(cc, cr + 1);
@@ -854,10 +937,8 @@ export class TearableStocking {
             0.2;
 
           const liftFade = Math.exp(-avgLift * 24.0);
-          this._bulgeRaw[vIdx] = openVal * liftFade;
-          // Rim shadow peaks right on the 0.25..0.75 border and fades inside the opening
-          const rimPeak = Math.sin(Math.min(1, openVal) * Math.PI);
-          this._rimRaw[vIdx] = rimPeak * liftFade;
+          this._bulgeRaw[vIdx] = maxBulge * liftFade;
+          this._rimRaw[vIdx] = maxRim * liftFade;
         }
       }
     }

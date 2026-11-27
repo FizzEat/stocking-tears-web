@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createProceduralCharacter } from './scene/ProceduralCharacter.js';
+import { createSculptedFoot, createStudioFloor } from './scene/FootGeometry.js';
 import { createStockingMaterial } from './shaders/stockingShader.js';
 import { TearableStocking } from './physics/TearableStocking.js';
 import { OuterSock } from './physics/OuterSock.js';
@@ -58,12 +59,12 @@ const VIEWS = {
     target: new THREE.Vector3(0.01, -0.04, 0.0),
   },
   view02: {
-    pos: new THREE.Vector3(1.16, -0.10, 1.52),
-    target: new THREE.Vector3(0.14, -0.18, 0.02),
+    pos: new THREE.Vector3(-0.14, -1.24, 1.56),
+    target: new THREE.Vector3(-0.06, -1.36, 0.12),
   },
   stage1Socks: {
-    pos: new THREE.Vector3(0.05, -0.78, 2.22),
-    target: new THREE.Vector3(0.01, -0.96, 0.0),
+    pos: new THREE.Vector3(0.05, -0.84, 2.26),
+    target: new THREE.Vector3(0.01, -1.04, 0.0),
   },
   stage3Ribbon: {
     pos: new THREE.Vector3(0.04, 0.56, 1.62),
@@ -105,14 +106,36 @@ function switchView(viewKey) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Procedural Character + Tearable Stockings + Gloved Hand
+// 3. Procedural Character + Feet & Toes + Studio Floor + Tearable Stockings
 // ---------------------------------------------------------------------------
 const character = createProceduralCharacter();
 scene.add(character.group);
 
-const stockingMaterial = createStockingMaterial();
-const leftStocking = new TearableStocking(-1, stockingMaterial);
-const rightStocking = new TearableStocking(1, stockingMaterial);
+const studioFloor = createStudioFloor();
+scene.add(studioFloor);
+
+const leftStockingMat = createStockingMaterial();
+const rightStockingMat = createStockingMaterial();
+const footStockingMat = createStockingMaterial();
+footStockingMat.uniforms.uFrostCoverage.value = 0.72; // sheer enough that all 5 toes show softly
+const allStockingMats = [leftStockingMat, rightStockingMat, footStockingMat];
+
+function setStockingUniform(name, val) {
+  for (const m of allStockingMats) {
+    if (name === 'uFrostCoverage' && m === footStockingMat) {
+      m.uniforms[name].value = Math.min(0.98, val + 0.08);
+    } else if (m.uniforms[name]) {
+      m.uniforms[name].value = val;
+    }
+  }
+}
+
+const leftFoot = createSculptedFoot(-1, character.skinMaterial, footStockingMat);
+const rightFoot = createSculptedFoot(1, character.skinMaterial, footStockingMat);
+character.group.add(leftFoot.group, rightFoot.group);
+
+const leftStocking = new TearableStocking(-1, leftStockingMat);
+const rightStocking = new TearableStocking(1, rightStockingMat);
 
 const foley = new FoleyAudio();
 leftStocking.onTear = () => foley.playTearSnap(1.0);
@@ -498,7 +521,7 @@ function repairAllTears() {
 
 function setColorMode(mode) {
   const isWhite = mode === 'white';
-  stockingMaterial.uniforms.uColorMode.value = isWhite ? 1.0 : 0.0;
+  setStockingUniform('uColorMode', isWhite ? 1.0 : 0.0);
   leftStocking.setFrayColorMode(isWhite);
   rightStocking.setFrayColorMode(isWhite);
 
@@ -534,24 +557,24 @@ document.getElementById('btn-toggle-panel').addEventListener('click', () => {
   settingsPanel.classList.toggle('hidden');
 });
 
-// Bind all Unity-Inspector style sliders
+// Bind all Unity-Inspector style sliders across left leg, right leg & feet stockings
 const sliderBindings = [
-  ['sl-weave-tiling', 'val-weave-tiling', (v) => (stockingMaterial.uniforms.uWeaveTiling.value = v), 1],
-  ['sl-weave-normal', 'val-weave-normal', (v) => (stockingMaterial.uniforms.uWeaveNormalStrength.value = v), 2],
-  ['sl-weave-contrast', 'val-weave-contrast', (v) => (stockingMaterial.uniforms.uWeaveContrast.value = v), 3],
-  ['sl-wrinkle', 'val-wrinkle', (v) => (stockingMaterial.uniforms.uWrinkleStrength.value = v), 2],
-  ['sl-tension-boost', 'val-tension-boost', (v) => (stockingMaterial.uniforms.uTensionNormalBoost.value = v), 2],
+  ['sl-weave-tiling', 'val-weave-tiling', (v) => setStockingUniform('uWeaveTiling', v), 1],
+  ['sl-weave-normal', 'val-weave-normal', (v) => setStockingUniform('uWeaveNormalStrength', v), 2],
+  ['sl-weave-contrast', 'val-weave-contrast', (v) => setStockingUniform('uWeaveContrast', v), 3],
+  ['sl-wrinkle', 'val-wrinkle', (v) => setStockingUniform('uWrinkleStrength', v), 2],
+  ['sl-tension-boost', 'val-tension-boost', (v) => setStockingUniform('uTensionNormalBoost', v), 2],
   ['slider-tear', 'val-tear', (v) => { leftStocking.tearSensitivity = rightStocking.tearSensitivity = v; }, 2],
   ['slider-bulge', 'val-bulge', (v) => { leftStocking.bulgeStrength = rightStocking.bulgeStrength = v; }, 2],
-  ['sl-pearl-strength', 'val-pearl-strength', (v) => (stockingMaterial.uniforms.uPearlStrength.value = v), 2],
-  ['sl-pearl-scale', 'val-pearl-scale', (v) => (stockingMaterial.uniforms.uPearlGrainScale.value = v), 0],
-  ['sl-pearl-spec', 'val-pearl-spec', (v) => (stockingMaterial.uniforms.uPearlSpecularStrength.value = v), 2],
-  ['sl-pearl-edge', 'val-pearl-edge', (v) => (stockingMaterial.uniforms.uPearlEdgeStrength.value = v), 2],
-  ['sl-glint-strength', 'val-glint-strength', (v) => (stockingMaterial.uniforms.uPearlGlintStrength.value = v), 2],
-  ['sl-glint-density', 'val-glint-density', (v) => (stockingMaterial.uniforms.uPearlGlintDensity.value = v), 2],
-  ['sl-frost-cov', 'val-frost-cov', (v) => (stockingMaterial.uniforms.uFrostCoverage.value = v), 2],
-  ['sl-frost-clear', 'val-frost-clear', (v) => (stockingMaterial.uniforms.uFrostClearAtStretch.value = v), 2],
-  ['sl-frost-smooth', 'val-frost-smooth', (v) => (stockingMaterial.uniforms.uFrostMatteSmoothness.value = v), 2],
+  ['sl-pearl-strength', 'val-pearl-strength', (v) => setStockingUniform('uPearlStrength', v), 2],
+  ['sl-pearl-scale', 'val-pearl-scale', (v) => setStockingUniform('uPearlGrainScale', v), 0],
+  ['sl-pearl-spec', 'val-pearl-spec', (v) => setStockingUniform('uPearlSpecularStrength', v), 2],
+  ['sl-pearl-edge', 'val-pearl-edge', (v) => setStockingUniform('uPearlEdgeStrength', v), 2],
+  ['sl-glint-strength', 'val-glint-strength', (v) => setStockingUniform('uPearlGlintStrength', v), 2],
+  ['sl-glint-density', 'val-glint-density', (v) => setStockingUniform('uPearlGlintDensity', v), 2],
+  ['sl-frost-cov', 'val-frost-cov', (v) => setStockingUniform('uFrostCoverage', v), 2],
+  ['sl-frost-clear', 'val-frost-clear', (v) => setStockingUniform('uFrostClearAtStretch', v), 2],
+  ['sl-frost-smooth', 'val-frost-smooth', (v) => setStockingUniform('uFrostMatteSmoothness', v), 2],
 ];
 
 const sliderSetters = {};
@@ -806,14 +829,17 @@ function animate() {
     computeOutwardNormal(activeStocking, _grabWorldPos, _outNormal);
     gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
 
-    stockingMaterial.uniforms.uPinchWorldPos.value.copy(_grabWorldPos);
-    stockingMaterial.uniforms.uPinchActive.value +=
-      (1.0 - stockingMaterial.uniforms.uPinchActive.value) * 0.25;
+    for (const m of allStockingMats) {
+      m.uniforms.uPinchWorldPos.value.copy(_grabWorldPos);
+      m.uniforms.uPinchActive.value += (1.0 - m.uniforms.uPinchActive.value) * 0.25;
+    }
   } else {
     if (isHoveringCloth) {
       gloveHand.updatePose(hoverPoint, hoverNormal, false, dt);
     }
-    stockingMaterial.uniforms.uPinchActive.value *= 0.86;
+    for (const m of allStockingMats) {
+      m.uniforms.uPinchActive.value *= 0.86;
+    }
   }
 
   renderer.render(scene, camera);
