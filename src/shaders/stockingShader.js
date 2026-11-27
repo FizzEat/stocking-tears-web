@@ -153,6 +153,7 @@ export function createStockingMaterial() {
           vec4 td = uTearData[i];
           vec4 tl = uTearLadder[i];
           if (tl.w < 0.5) continue;
+          if (tl.z != 0.0 && tl.z * vWorldPos.x < 0.0) continue;
 
           // Wrap horizontal UV delta cleanly across cylinder seam
           float du = vUv.x - td.x;

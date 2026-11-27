@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createProceduralCharacter } from './scene/ProceduralCharacter.js';
-import { createSculptedFoot, createStudioFloor } from './scene/FootGeometry.js';
+import { createPleatedSkirt } from './scene/ProceduralCharacter.js';
+import { createStudioFloor } from './scene/FootGeometry.js';
+import { createSkinMaterial } from './shaders/skinShader.js';
 import { createStockingMaterial } from './shaders/stockingShader.js';
-import { TearableStocking } from './physics/TearableStocking.js';
+import { loadSculptedLegsAndStockings } from './physics/SculptedStocking.js';
 import { OuterSock } from './physics/OuterSock.js';
 import { RibbonBow } from './physics/RibbonBow.js';
 import { GloveHand } from './scene/GloveHand.js';
@@ -44,7 +45,7 @@ fillLight.position.set(0.8, -1.5, 2.6);
 scene.add(fillLight);
 
 // ---------------------------------------------------------------------------
-// 2. Camera & OrbitControls (VIEW 01 / VIEW 02)
+// 2. Camera & OrbitControls (VIEW 01 = Thighs/Skirt, VIEW 02 = Calf/Ankle/Feet)
 // ---------------------------------------------------------------------------
 const camera = new THREE.PerspectiveCamera(
   34,
@@ -55,20 +56,20 @@ const camera = new THREE.PerspectiveCamera(
 
 const VIEWS = {
   view01: {
-    pos: new THREE.Vector3(0.05, 0.02, 2.58),
-    target: new THREE.Vector3(0.01, -0.04, 0.0),
+    pos: new THREE.Vector3(0.06, -0.05, 2.75),
+    target: new THREE.Vector3(0.0, -0.10, 0.0),
   },
   view02: {
-    pos: new THREE.Vector3(-0.14, -1.24, 1.56),
-    target: new THREE.Vector3(-0.06, -1.36, 0.12),
+    pos: new THREE.Vector3(-0.22, -1.16, 1.82),
+    target: new THREE.Vector3(-0.14, -1.32, 0.08),
   },
   stage1Socks: {
-    pos: new THREE.Vector3(0.05, -0.84, 2.26),
-    target: new THREE.Vector3(0.01, -1.04, 0.0),
+    pos: new THREE.Vector3(0.05, -0.84, 2.45),
+    target: new THREE.Vector3(0.0, -1.06, 0.0),
   },
   stage3Ribbon: {
-    pos: new THREE.Vector3(0.04, 0.56, 1.62),
-    target: new THREE.Vector3(0.01, 0.52, 0.25),
+    pos: new THREE.Vector3(0.04, 0.58, 1.72),
+    target: new THREE.Vector3(0.0, 0.54, 0.25),
   },
 };
 
@@ -78,10 +79,10 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.07;
 controls.target.copy(VIEWS.view01.target);
-controls.minDistance = 0.85;
-controls.maxDistance = 4.5;
-controls.maxPolarAngle = Math.PI * 0.82;
-controls.minPolarAngle = Math.PI * 0.18;
+controls.minDistance = 0.75;
+controls.maxDistance = 4.8;
+controls.maxPolarAngle = Math.PI * 0.84;
+controls.minPolarAngle = Math.PI * 0.16;
 
 controls.mouseButtons = {
   LEFT: null,
@@ -106,104 +107,99 @@ function switchView(viewKey) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Procedural Character + Feet & Toes + Studio Floor + Tearable Stockings
+// 3. Real Sculpted CC0 MakeHuman Legs & Delicate Feet + Skirt + Floor
 // ---------------------------------------------------------------------------
-const character = createProceduralCharacter();
-scene.add(character.group);
+const skinMaterial = createSkinMaterial();
+const stockingMaterial = createStockingMaterial();
+const foley = new FoleyAudio();
+
+const characterGroup = new THREE.Group();
+scene.add(characterGroup);
+
+// Tailored pleated sailor skirt matching MakeHuman hip dimensions
+const skirt = createPleatedSkirt();
+skirt.scale.set(1.18, 1.0, 1.12);
+skirt.position.set(0, 0.04, 0.02);
+characterGroup.add(skirt);
 
 const studioFloor = createStudioFloor();
 scene.add(studioFloor);
 
-const leftStockingMat = createStockingMaterial();
-const rightStockingMat = createStockingMaterial();
-const footStockingMat = createStockingMaterial();
-footStockingMat.uniforms.uFrostCoverage.value = 0.72; // sheer enough that all 5 toes show softly
-const allStockingMats = [leftStockingMat, rightStockingMat, footStockingMat];
+let sculpted = null;
+loadSculptedLegsAndStockings(skinMaterial, stockingMaterial)
+  .then((ctrl) => {
+    sculpted = ctrl;
+    sculpted.onTear = () => foley.playTearSnap(1.0);
+    characterGroup.add(sculpted.skinMesh, sculpted.clothMesh);
 
-function setStockingUniform(name, val) {
-  for (const m of allStockingMats) {
-    if (name === 'uFrostCoverage' && m === footStockingMat) {
-      m.uniforms[name].value = Math.min(0.98, val + 0.08);
-    } else if (m.uniforms[name]) {
-      m.uniforms[name].value = val;
-    }
-  }
-}
+    // Align studio floor contact shadows directly underneath the real sculpted feet!
+    studioFloor.material.uniforms.uLeftFoot.value.copy(sculpted.leftFootCenter);
+    studioFloor.material.uniforms.uRightFoot.value.copy(sculpted.rightFootCenter);
+  })
+  .catch((err) => {
+    console.error('Failed to load sculpted_legs.glb:', err);
+  });
 
-const leftFoot = createSculptedFoot(-1, character.skinMaterial, footStockingMat);
-const rightFoot = createSculptedFoot(1, character.skinMaterial, footStockingMat);
-character.group.add(leftFoot.group, rightFoot.group);
-
-const leftStocking = new TearableStocking(-1, leftStockingMat);
-const rightStocking = new TearableStocking(1, rightStockingMat);
-
-const foley = new FoleyAudio();
-leftStocking.onTear = () => foley.playTearSnap(1.0);
-rightStocking.onTear = () => foley.playTearSnap(1.0);
-
-const stockingGroup = new THREE.Group();
-stockingGroup.add(leftStocking.mesh, leftStocking.frayMesh);
-stockingGroup.add(rightStocking.mesh, rightStocking.frayMesh);
-scene.add(stockingGroup);
-
-// Stage 1: Outer Ribbed Knit Socks (visible in Challenge Mode)
+// Stage 1: Outer Ribbed Knit Socks (aligned to sculpted calves)
 const leftOuterSock = new OuterSock(-1);
 const rightOuterSock = new OuterSock(1);
 const outerSockGroup = new THREE.Group();
 outerSockGroup.add(leftOuterSock.mesh, rightOuterSock.mesh);
+outerSockGroup.scale.set(1.38, 1.0, 1.15);
 outerSockGroup.visible = false;
 scene.add(outerSockGroup);
 
 // Stage 3: Interactive Satin Ribbon Bow on pleated skirt waist
 const ribbonBow = new RibbonBow();
+ribbonBow.anchorPos.set(0.0, 0.66, 0.42);
+ribbonBow.reset();
 ribbonBow.group.visible = false;
 scene.add(ribbonBow.group);
 
 const gloveHand = new GloveHand();
 scene.add(gloveHand.group);
 
-// Subtle pulsing 3D guide ring for Challenge Mode interactive targets
-const guideRingGeom = new THREE.RingGeometry(0.032, 0.044, 32);
-const guideRingMat = new THREE.MeshBasicMaterial({
-  color: '#7be0f5',
-  transparent: true,
-  opacity: 0.72,
-  side: THREE.DoubleSide,
-  depthTest: false,
-});
-const guideRing = new THREE.Mesh(guideRingGeom, guideRingMat);
+// Subtle pulsing 3D guide ring for Challenge Mode
+const guideRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.032, 0.044, 32),
+  new THREE.MeshBasicMaterial({
+    color: '#7be0f5',
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide,
+    depthTest: false,
+  })
+);
 guideRing.renderOrder = 9;
 guideRing.visible = false;
 scene.add(guideRing);
 
 let prevSockLRemoved = false;
 let prevSockRRemoved = false;
-
 let customModelRoot = null;
 
 // ---------------------------------------------------------------------------
 // 4. Interaction State ('challenge' | 'tear' | 'roll')
 // ---------------------------------------------------------------------------
-let interactionMode = 'tear'; // 'challenge' | 'tear' | 'roll'
-let challengeStage = 1; // 1: Outer Socks, 2: Roll Stockings, 3: Untie Ribbon Bow, 4: Clear!
+let interactionMode = 'tear';
+let challengeStage = 1;
 
 const raycaster = new THREE.Raycaster();
 const pointerNDC = new THREE.Vector2();
 const dragPlane = new THREE.Plane();
 const dragIntersect = new THREE.Vector3();
 
-let activeStocking = null;
-let activeOuterSock = null;
-let activeRibbonPull = false;
 let isDragging = false;
 let isHandPinned = false;
+let activeOuterSock = null;
+let activeRibbonPull = false;
+let activeRollSide = 0;
 let rollDragOffsetY = 0;
 
 let hoverPoint = new THREE.Vector3();
 let hoverNormal = new THREE.Vector3(1, 0, 0);
 let isHoveringCloth = false;
 
-const _tmpVec = new THREE.Vector3();
 const _grabWorldPos = new THREE.Vector3();
 const _outNormal = new THREE.Vector3(1, 0, 0);
 
@@ -224,8 +220,8 @@ function raycastInteractive() {
       const hits = raycaster.intersectObjects(targets, false);
       return hits.length > 0 ? { kind: 'outerSock', hit: hits[0] } : null;
     }
-    if (challengeStage === 2 && stockingGroup.visible) {
-      const hits = raycaster.intersectObjects([leftStocking.mesh, rightStocking.mesh], false);
+    if (challengeStage === 2 && sculpted) {
+      const hits = raycaster.intersectObject(sculpted.clothMesh, false);
       return hits.length > 0 ? { kind: 'stocking', hit: hits[0] } : null;
     }
     if (challengeStage === 3 && ribbonBow.group.visible && !ribbonBow.untied) {
@@ -235,15 +231,16 @@ function raycastInteractive() {
     return null;
   }
 
-  if (!stockingGroup.visible) return null;
-  const hits = raycaster.intersectObjects([leftStocking.mesh, rightStocking.mesh], false);
+  if (!sculpted || !characterGroup.visible) return null;
+  const hits = raycaster.intersectObject(sculpted.clothMesh, false);
   return hits.length > 0 ? { kind: 'stocking', hit: hits[0] } : null;
 }
 
-function computeOutwardNormal(stocking, worldPos, out = new THREE.Vector3()) {
-  const legCenterX = stocking.side * 0.22;
-  out.set(worldPos.x - legCenterX, 0.0, worldPos.z);
-  if (out.lengthSq() < 1e-5) out.set(stocking.side, 0, 0.5);
+function computeOutwardNormal(worldPos, out = new THREE.Vector3()) {
+  const side = worldPos.x < 0 ? -1 : 1;
+  const cx = side * 0.34;
+  out.set(worldPos.x - cx, 0.0, worldPos.z);
+  if (out.lengthSq() < 1e-5) out.set(side, 0, 0.5);
   return out.normalize();
 }
 
@@ -259,20 +256,13 @@ renderer.domElement.addEventListener('pointermove', (e) => {
       } else if (activeRibbonPull) {
         ribbonBow.dragPull(dragIntersect);
         foley.playFabricSlide(0.75);
-      } else if (activeStocking) {
-        if (interactionMode === 'roll' || (interactionMode === 'challenge' && challengeStage === 2)) {
-          activeStocking.pullCuffTo(dragIntersect.y + rollDragOffsetY, dragIntersect);
+      } else if (sculpted) {
+        if (activeRollSide !== 0) {
+          sculpted.pullCuff(activeRollSide, dragIntersect.y + rollDragOffsetY);
           foley.playFabricSlide(0.6);
-        } else {
-          const legCenterX = activeStocking.side * 0.22;
-          _tmpVec.set(dragIntersect.x - legCenterX, 0, dragIntersect.z);
-          if (_tmpVec.length() > 0.72) {
-            _tmpVec.setLength(0.72);
-            dragIntersect.x = legCenterX + _tmpVec.x;
-            dragIntersect.z = _tmpVec.z;
-          }
-          dragIntersect.y = Math.max(-1.42, Math.min(0.62, dragIntersect.y));
-          activeStocking.setGrabTarget(dragIntersect);
+        } else if (sculpted.isGrabbing) {
+          dragIntersect.y = Math.max(-1.62, Math.min(0.62, dragIntersect.y));
+          sculpted.setGrabTarget(dragIntersect);
         }
       }
     }
@@ -283,23 +273,17 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   if (res) {
     isHoveringCloth = true;
     hoverPoint.copy(res.hit.point);
-    if (res.kind === 'outerSock') {
-      computeOutwardNormal(res.hit.object.userData.outerSock, res.hit.point, hoverNormal);
-    } else if (res.kind === 'stocking') {
-      computeOutwardNormal(res.hit.object.userData.stocking, res.hit.point, hoverNormal);
-    } else {
+    if (res.kind === 'ribbon') {
       hoverNormal.set(0.2, 0.0, 1.0).normalize();
+    } else {
+      computeOutwardNormal(res.hit.point, hoverNormal);
     }
     container.classList.add('hover-cloth');
-    if (!isHandPinned) {
-      gloveHand.setVisible(true);
-    }
+    if (!isHandPinned) gloveHand.setVisible(true);
   } else {
     isHoveringCloth = false;
     container.classList.remove('hover-cloth');
-    if (!isHandPinned && !isDragging) {
-      gloveHand.setVisible(false);
-    }
+    if (!isHandPinned && !isDragging) gloveHand.setVisible(false);
   }
 });
 
@@ -310,9 +294,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   const res = raycastInteractive();
   if (!res) return;
 
-  if (isHandPinned && activeStocking) {
-    activeStocking.releaseGrab();
-    activeStocking.releaseCuffGrip();
+  if (isHandPinned && sculpted) {
+    sculpted.releaseGrab();
     isHandPinned = false;
     gloveHand.setPinned(false);
   }
@@ -343,19 +326,19 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     return;
   }
 
-  const st = res.hit.object.userData.stocking;
-  if (interactionMode === 'roll' || (interactionMode === 'challenge' && challengeStage === 2)) {
-    activeStocking = st;
-    isDragging = true;
-    rollDragOffsetY = st.cuffY - res.hit.point.y;
-    st.pullCuffTo(st.cuffY, res.hit.point);
-    container.classList.add('grabbing');
-    gloveHand.setVisible(true);
-  } else if (st.grabAtPoint(res.hit.point)) {
-    activeStocking = st;
-    isDragging = true;
-    container.classList.add('grabbing');
-    gloveHand.setVisible(true);
+  if (sculpted) {
+    if (interactionMode === 'roll' || (interactionMode === 'challenge' && challengeStage === 2)) {
+      activeRollSide = res.hit.point.x < 0 ? -1 : 1;
+      rollDragOffsetY = sculpted.cuffY[String(activeRollSide)] - res.hit.point.y;
+      sculpted.pullCuff(activeRollSide, sculpted.cuffY[String(activeRollSide)]);
+      isDragging = true;
+      container.classList.add('grabbing');
+      gloveHand.setVisible(true);
+    } else if (sculpted.grabAtHit(res.hit)) {
+      isDragging = true;
+      container.classList.add('grabbing');
+      gloveHand.setVisible(true);
+    }
   }
 });
 
@@ -372,14 +355,12 @@ function endDrag() {
     ribbonBow.releasePull();
     activeRibbonPull = false;
   }
-
-  if (!isHandPinned && activeStocking) {
-    if (interactionMode === 'roll' || interactionMode === 'challenge') {
-      activeStocking.releaseCuffGrip();
-    } else {
-      activeStocking.releaseGrab();
-    }
-    activeStocking = null;
+  if (activeRollSide !== 0 && sculpted) {
+    sculpted.releaseCuff();
+    activeRollSide = 0;
+  }
+  if (!isHandPinned && sculpted && sculpted.isGrabbing) {
+    sculpted.releaseGrab();
   }
 }
 
@@ -387,7 +368,7 @@ window.addEventListener('pointerup', endDrag);
 window.addEventListener('pointercancel', endDrag);
 
 // ---------------------------------------------------------------------------
-// 5. Mode Switcher, Inspector Sliders & Presets
+// 5. Mode Switcher, Challenge HUD, Inspector Sliders & Presets
 // ---------------------------------------------------------------------------
 let toastTimer = null;
 function showToast(msg) {
@@ -433,8 +414,7 @@ function startChallengeMode() {
   prevSockRRemoved = false;
   leftOuterSock.reset();
   rightOuterSock.reset();
-  leftStocking.repair();
-  rightStocking.repair();
+  if (sculpted) sculpted.repair();
   ribbonBow.reset();
 
   outerSockGroup.visible = true;
@@ -454,12 +434,8 @@ function setMode(mode) {
   gloveHand.setPinned(false);
   activeOuterSock = null;
   activeRibbonPull = false;
-
-  if (activeStocking) {
-    activeStocking.releaseGrab();
-    activeStocking.releaseCuffGrip();
-    activeStocking = null;
-  }
+  activeRollSide = 0;
+  if (sculpted) sculpted.releaseGrab();
 
   document.getElementById('btn-mode-challenge').classList.toggle('active', mode === 'challenge');
   document.getElementById('btn-mode-tear').classList.toggle('active', mode === 'tear');
@@ -475,7 +451,7 @@ function setMode(mode) {
     showToast(
       mode === 'roll'
         ? '脱袜子模式：左键向下拖拽即可将丝袜卷边褪下（左右腿独立）'
-        : '撕裂 / 勾丝模式：左键拉扯即可产生褶皱、撕裂破口与纵向抽丝'
+        : '撕裂 / 勾丝模式：左键拉扯即可产生褶皱、杏仁破口与纵向抽丝'
     );
   }
 }
@@ -491,16 +467,10 @@ function togglePinHand() {
   if (isHandPinned) {
     isHandPinned = false;
     gloveHand.setPinned(false);
-    if (!isDragging && activeStocking) {
-      activeStocking.releaseGrab();
-      activeStocking.releaseCuffGrip();
-      activeStocking = null;
-    }
-    if (!isHoveringCloth) {
-      gloveHand.setVisible(false);
-    }
+    if (!isDragging && sculpted) sculpted.releaseGrab();
+    if (!isHoveringCloth) gloveHand.setVisible(false);
     showToast('已松开手部');
-  } else if (activeStocking) {
+  } else if (sculpted && sculpted.isGrabbing) {
     isHandPinned = true;
     gloveHand.setPinned(true);
     showToast('已固定手部（可右键旋转视角观察，按 1 松开）');
@@ -513,29 +483,21 @@ function repairAllTears() {
   isHandPinned = false;
   isDragging = false;
   gloveHand.setPinned(false);
-  activeStocking = null;
-  leftStocking.repair();
-  rightStocking.repair();
+  if (sculpted) sculpted.repair();
   showToast('已还原所有破损并穿回丝袜');
 }
 
 function setColorMode(mode) {
   const isWhite = mode === 'white';
-  setStockingUniform('uColorMode', isWhite ? 1.0 : 0.0);
-  leftStocking.setFrayColorMode(isWhite);
-  rightStocking.setFrayColorMode(isWhite);
-
+  stockingMaterial.uniforms.uColorMode.value = isWhite ? 1.0 : 0.0;
   document.getElementById('btn-color-black').classList.toggle('active', !isWhite);
   document.getElementById('btn-color-white').classList.toggle('active', isWhite);
 }
 
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === '1') {
-    togglePinHand();
-  } else if (e.key === '2') {
-    repairAllTears();
-  }
+  if (e.key === '1') togglePinHand();
+  else if (e.key === '2') repairAllTears();
 });
 
 document.getElementById('btn-view-01').addEventListener('click', () => switchView('view01'));
@@ -557,24 +519,23 @@ document.getElementById('btn-toggle-panel').addEventListener('click', () => {
   settingsPanel.classList.toggle('hidden');
 });
 
-// Bind all Unity-Inspector style sliders across left leg, right leg & feet stockings
 const sliderBindings = [
-  ['sl-weave-tiling', 'val-weave-tiling', (v) => setStockingUniform('uWeaveTiling', v), 1],
-  ['sl-weave-normal', 'val-weave-normal', (v) => setStockingUniform('uWeaveNormalStrength', v), 2],
-  ['sl-weave-contrast', 'val-weave-contrast', (v) => setStockingUniform('uWeaveContrast', v), 3],
-  ['sl-wrinkle', 'val-wrinkle', (v) => setStockingUniform('uWrinkleStrength', v), 2],
-  ['sl-tension-boost', 'val-tension-boost', (v) => setStockingUniform('uTensionNormalBoost', v), 2],
-  ['slider-tear', 'val-tear', (v) => { leftStocking.tearSensitivity = rightStocking.tearSensitivity = v; }, 2],
-  ['slider-bulge', 'val-bulge', (v) => { leftStocking.bulgeStrength = rightStocking.bulgeStrength = v; }, 2],
-  ['sl-pearl-strength', 'val-pearl-strength', (v) => setStockingUniform('uPearlStrength', v), 2],
-  ['sl-pearl-scale', 'val-pearl-scale', (v) => setStockingUniform('uPearlGrainScale', v), 0],
-  ['sl-pearl-spec', 'val-pearl-spec', (v) => setStockingUniform('uPearlSpecularStrength', v), 2],
-  ['sl-pearl-edge', 'val-pearl-edge', (v) => setStockingUniform('uPearlEdgeStrength', v), 2],
-  ['sl-glint-strength', 'val-glint-strength', (v) => setStockingUniform('uPearlGlintStrength', v), 2],
-  ['sl-glint-density', 'val-glint-density', (v) => setStockingUniform('uPearlGlintDensity', v), 2],
-  ['sl-frost-cov', 'val-frost-cov', (v) => setStockingUniform('uFrostCoverage', v), 2],
-  ['sl-frost-clear', 'val-frost-clear', (v) => setStockingUniform('uFrostClearAtStretch', v), 2],
-  ['sl-frost-smooth', 'val-frost-smooth', (v) => setStockingUniform('uFrostMatteSmoothness', v), 2],
+  ['sl-weave-tiling', 'val-weave-tiling', (v) => (stockingMaterial.uniforms.uWeaveTiling.value = v), 1],
+  ['sl-weave-normal', 'val-weave-normal', (v) => (stockingMaterial.uniforms.uWeaveNormalStrength.value = v), 2],
+  ['sl-weave-contrast', 'val-weave-contrast', (v) => (stockingMaterial.uniforms.uWeaveContrast.value = v), 3],
+  ['sl-wrinkle', 'val-wrinkle', (v) => (stockingMaterial.uniforms.uWrinkleStrength.value = v), 2],
+  ['sl-tension-boost', 'val-tension-boost', (v) => (stockingMaterial.uniforms.uTensionNormalBoost.value = v), 2],
+  ['slider-tear', 'val-tear', (v) => { if (sculpted) sculpted.tearSensitivity = v; }, 2],
+  ['slider-bulge', 'val-bulge', (v) => { if (sculpted) sculpted.bulgeStrength = v; }, 2],
+  ['sl-pearl-strength', 'val-pearl-strength', (v) => (stockingMaterial.uniforms.uPearlStrength.value = v), 2],
+  ['sl-pearl-scale', 'val-pearl-scale', (v) => (stockingMaterial.uniforms.uPearlGrainScale.value = v), 0],
+  ['sl-pearl-spec', 'val-pearl-spec', (v) => (stockingMaterial.uniforms.uPearlSpecularStrength.value = v), 2],
+  ['sl-pearl-edge', 'val-pearl-edge', (v) => (stockingMaterial.uniforms.uPearlEdgeStrength.value = v), 2],
+  ['sl-glint-strength', 'val-glint-strength', (v) => (stockingMaterial.uniforms.uPearlGlintStrength.value = v), 2],
+  ['sl-glint-density', 'val-glint-density', (v) => (stockingMaterial.uniforms.uPearlGlintDensity.value = v), 2],
+  ['sl-frost-cov', 'val-frost-cov', (v) => (stockingMaterial.uniforms.uFrostCoverage.value = v), 2],
+  ['sl-frost-clear', 'val-frost-clear', (v) => (stockingMaterial.uniforms.uFrostClearAtStretch.value = v), 2],
+  ['sl-frost-smooth', 'val-frost-smooth', (v) => (stockingMaterial.uniforms.uFrostMatteSmoothness.value = v), 2],
 ];
 
 const sliderSetters = {};
@@ -590,31 +551,30 @@ for (const [id, valId, apply, decimals] of sliderBindings) {
   sliderSetters[id] = update;
 }
 
-// 1-click Material Presets
 const PRESETS = {
   matteBlack: {
     color: 'black',
-    'sl-frost-cov': 0.82,
+    'sl-frost-cov': 0.83,
     'sl-frost-clear': 1.0,
     'sl-frost-smooth': 0.85,
-    'sl-pearl-strength': 0.25,
-    'sl-pearl-spec': 0.42,
-    'sl-glint-strength': 0.55,
-    'sl-glint-density': 0.08,
+    'sl-pearl-strength': 0.32,
+    'sl-pearl-spec': 0.52,
+    'sl-glint-strength': 0.72,
+    'sl-glint-density': 0.10,
   },
   pearlBlack: {
     color: 'black',
-    'sl-frost-cov': 0.68,
+    'sl-frost-cov': 0.72,
     'sl-frost-clear': 1.15,
     'sl-frost-smooth': 0.94,
-    'sl-pearl-strength': 0.88,
-    'sl-pearl-spec': 1.18,
-    'sl-glint-strength': 1.45,
-    'sl-glint-density': 0.22,
+    'sl-pearl-strength': 0.82,
+    'sl-pearl-spec': 1.12,
+    'sl-glint-strength': 1.35,
+    'sl-glint-density': 0.20,
   },
   sheer20d: {
     color: 'black',
-    'sl-frost-cov': 0.36,
+    'sl-frost-cov': 0.38,
     'sl-frost-clear': 1.25,
     'sl-frost-smooth': 0.80,
     'sl-pearl-strength': 0.45,
@@ -640,9 +600,7 @@ document.querySelectorAll('.preset-chip').forEach((btn) => {
     if (!preset) return;
     setColorMode(preset.color);
     for (const [k, v] of Object.entries(preset)) {
-      if (k !== 'color' && sliderSetters[k]) {
-        sliderSetters[k](v);
-      }
+      if (k !== 'color' && sliderSetters[k]) sliderSetters[k](v);
     }
     showToast(`已切换预设：${btn.textContent}`);
   });
@@ -658,14 +616,12 @@ glbInput.addEventListener('change', async (e) => {
   try {
     showToast(`正在加载 ${file.name} ...`);
     const model = await loadCustomGLB(file);
-    if (customModelRoot) {
-      scene.remove(customModelRoot);
-    }
+    if (customModelRoot) scene.remove(customModelRoot);
     customModelRoot = model;
     scene.add(customModelRoot);
-    character.group.visible = false;
+    characterGroup.visible = false;
     resetModelBtn.classList.remove('hidden');
-    showToast(`已导入 ${file.name}（丝袜交互层保持叠加）`);
+    showToast(`已导入 ${file.name}`);
   } catch (err) {
     console.error(err);
     showToast('模型加载失败，请确认是有效的 .glb / .gltf 文件');
@@ -678,9 +634,9 @@ resetModelBtn.addEventListener('click', () => {
     scene.remove(customModelRoot);
     customModelRoot = null;
   }
-  character.group.visible = true;
+  characterGroup.visible = true;
   resetModelBtn.classList.add('hidden');
-  showToast('已恢复内置 3D 模型');
+  showToast('已恢复内置精雕 3D 腿部模型');
 });
 
 window.addEventListener('resize', () => {
@@ -709,11 +665,9 @@ function animate() {
 
   controls.update();
 
-  leftStocking.step(dt);
-  rightStocking.step(dt);
-
-  leftStocking.updateSkinBulge(character.leftLeg);
-  rightStocking.updateSkinBulge(character.rightLeg);
+  if (sculpted) {
+    sculpted.step(dt);
+  }
 
   if (outerSockGroup.visible) {
     leftOuterSock.step(dt);
@@ -731,8 +685,8 @@ function animate() {
     ribbonBow.updateVisuals(clock.elapsedTime, dt);
   }
 
-  // Stage Challenge Progression Logic & 3D Pulsing Guide Beacon
-  if (interactionMode === 'challenge') {
+  // Stage Challenge Progression Logic
+  if (interactionMode === 'challenge' && sculpted) {
     const pulse = 1.0 + Math.sin(clock.elapsedTime * 5.0) * 0.16;
     guideRing.scale.setScalar(pulse);
     guideRing.quaternion.copy(camera.quaternion);
@@ -744,7 +698,7 @@ function animate() {
         const targetSock = !rightOuterSock.removed ? rightOuterSock : leftOuterSock;
         if (!targetSock.removed) {
           guideRing.visible = true;
-          guideRing.position.set(targetSock.side * 0.22, targetSock.cuffY - 0.04, 0.16);
+          guideRing.position.set(targetSock.side * 0.30, targetSock.cuffY - 0.04, 0.18);
         }
       } else {
         guideRing.visible = false;
@@ -760,25 +714,23 @@ function animate() {
         showToast('✅ 第 1 关通过！解锁第 2 关：褪下双腿丝袜');
       }
     } else if (challengeStage === 2) {
-      const rollRange = 0.66 - (-0.72);
-      const pL = Math.max(0, Math.min(1, (0.66 - leftStocking.cuffY) / rollRange));
-      const pR = Math.max(0, Math.min(1, (0.66 - rightStocking.cuffY) / rollRange));
-      const p2 = (pL + pR) * 0.5;
-      updateChallengeHUD(p2);
+      const rollRange = 0.64 - (-0.72);
+      const pL = Math.max(0, Math.min(1, (0.64 - sculpted.cuffY['-1']) / rollRange));
+      const pR = Math.max(0, Math.min(1, (0.64 - sculpted.cuffY['1']) / rollRange));
+      updateChallengeHUD((pL + pR) * 0.5);
 
       if (!isDragging) {
         const side = pR < 0.92 ? 1 : -1;
-        const cuffY = side > 0 ? rightStocking.cuffY : leftStocking.cuffY;
+        const cY = sculpted.cuffY[String(side)];
         guideRing.visible = true;
-        guideRing.position.set(side * 0.22, Math.min(0.28, cuffY - 0.08), 0.21);
+        guideRing.position.set(side * 0.32, Math.min(0.28, cY - 0.08), 0.22);
       } else {
         guideRing.visible = false;
       }
 
       if (pL >= 0.92 && pR >= 0.92) {
         challengeStage = 3;
-        if (activeStocking) activeStocking.releaseCuffGrip();
-        activeStocking = null;
+        activeRollSide = 0;
         isDragging = false;
         updateChallengeHUD(0);
         switchView('stage3Ribbon');
@@ -789,7 +741,7 @@ function animate() {
       updateChallengeHUD(ribbonBow.untieProgress);
       if (!isDragging && !ribbonBow.untied) {
         guideRing.visible = true;
-        guideRing.position.set(0.09, 0.50, 0.41);
+        guideRing.position.set(0.09, 0.52, 0.46);
       } else {
         guideRing.visible = false;
       }
@@ -812,34 +764,32 @@ function animate() {
     guideRing.visible = false;
   }
 
+  // Update Glove Hand & Pinch Wrinkles
   if (activeOuterSock && isDragging) {
     activeOuterSock.getHandlePoint(_grabWorldPos);
-    computeOutwardNormal(activeOuterSock, _grabWorldPos, _outNormal);
+    computeOutwardNormal(_grabWorldPos, _outNormal);
     gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
   } else if (activeRibbonPull && isDragging) {
     ribbonBow.getHandleWorldPos(_grabWorldPos);
     _outNormal.set(0.2, 0.0, 1.0).normalize();
     gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
-  } else if (activeStocking && (isDragging || isHandPinned)) {
-    if (interactionMode === 'roll' || (interactionMode === 'challenge' && challengeStage === 2)) {
-      activeStocking.getCuffHandlePoint(_grabWorldPos);
-    } else {
-      activeStocking.getGrabPosition(_grabWorldPos);
-    }
-    computeOutwardNormal(activeStocking, _grabWorldPos, _outNormal);
+  } else if (sculpted && activeRollSide !== 0 && isDragging) {
+    sculpted.getCuffHandlePoint(activeRollSide, _grabWorldPos);
+    computeOutwardNormal(_grabWorldPos, _outNormal);
+    gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
+  } else if (sculpted && sculpted.isGrabbing && (isDragging || isHandPinned)) {
+    sculpted.getGrabPosition(_grabWorldPos);
+    computeOutwardNormal(_grabWorldPos, _outNormal);
     gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
 
-    for (const m of allStockingMats) {
-      m.uniforms.uPinchWorldPos.value.copy(_grabWorldPos);
-      m.uniforms.uPinchActive.value += (1.0 - m.uniforms.uPinchActive.value) * 0.25;
-    }
+    stockingMaterial.uniforms.uPinchWorldPos.value.copy(_grabWorldPos);
+    stockingMaterial.uniforms.uPinchActive.value +=
+      (1.0 - stockingMaterial.uniforms.uPinchActive.value) * 0.25;
   } else {
     if (isHoveringCloth) {
       gloveHand.updatePose(hoverPoint, hoverNormal, false, dt);
     }
-    for (const m of allStockingMats) {
-      m.uniforms.uPinchActive.value *= 0.86;
-    }
+    stockingMaterial.uniforms.uPinchActive.value *= 0.86;
   }
 
   renderer.render(scene, camera);
