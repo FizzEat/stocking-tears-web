@@ -56,15 +56,15 @@ const camera = new THREE.PerspectiveCamera(
 
 const VIEWS = {
   view01: {
-    pos: new THREE.Vector3(0.06, -0.05, 2.75),
-    target: new THREE.Vector3(0.0, -0.10, 0.0),
+    pos: new THREE.Vector3(0.04, -0.04, 2.65),
+    target: new THREE.Vector3(0.0, -0.08, 0.0),
   },
   view02: {
-    pos: new THREE.Vector3(-0.22, -1.16, 1.82),
-    target: new THREE.Vector3(-0.14, -1.32, 0.08),
+    pos: new THREE.Vector3(-0.28, -1.18, 1.46),
+    target: new THREE.Vector3(-0.24, -1.36, 0.12),
   },
   stage1Socks: {
-    pos: new THREE.Vector3(0.05, -0.84, 2.45),
+    pos: new THREE.Vector3(0.04, -0.84, 2.35),
     target: new THREE.Vector3(0.0, -1.06, 0.0),
   },
   stage3Ribbon: {
@@ -116,10 +116,10 @@ const foley = new FoleyAudio();
 const characterGroup = new THREE.Group();
 scene.add(characterGroup);
 
-// Tailored pleated sailor skirt matching MakeHuman hip dimensions
+// Tailored pleated sailor skirt matching MakeHuman graceful standing hip dimensions
 const skirt = createPleatedSkirt();
-skirt.scale.set(1.18, 1.0, 1.12);
-skirt.position.set(0, 0.04, 0.02);
+skirt.scale.set(1.16, 1.0, 1.12);
+skirt.position.set(0, 0.05, 0.02);
 characterGroup.add(skirt);
 
 const studioFloor = createStudioFloor();

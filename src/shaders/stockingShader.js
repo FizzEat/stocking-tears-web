@@ -30,9 +30,9 @@ export function createStockingMaterial() {
       uFabricSheenColor: { value: new THREE.Color(0.14, 0.15, 0.18) },
 
       // Group 1: Weave & Normal
-      uWeaveTiling: { value: 12.0 },
-      uWeaveNormalStrength: { value: 0.85 },
-      uWeaveContrast: { value: 0.035 },
+      uWeaveTiling: { value: 14.0 },
+      uWeaveNormalStrength: { value: 0.72 },
+      uWeaveContrast: { value: 0.018 },
 
       // Group 2: Tension & Wrinkles
       uWrinkleStrength: { value: 1.2 },
