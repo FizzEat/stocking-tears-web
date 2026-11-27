@@ -3,7 +3,7 @@
 Real-time WebGL / Three.js interactive tearable cloth & stocking physics demo inspired by Sakura Rabbit's Unity showcase.
 
 ## Live Demo
-https://nicebeaf.github.io/stocking-tears-web/
+https://fizzeat.github.io/stocking-tears-web/
 
 ## Features
 - **Tearable Cloth & Vertical Ladders**: Real-time Verlet cloth simulation with local tearing, frayed nylon strands, vertical stocking runs, and coupled raised-skin bulge inside tear openings.
