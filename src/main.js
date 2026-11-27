@@ -488,10 +488,24 @@ function repairAllTears() {
 }
 
 function setColorMode(mode) {
-  const isWhite = mode === 'white';
-  stockingMaterial.uniforms.uColorMode.value = isWhite ? 1.0 : 0.0;
-  document.getElementById('btn-color-black').classList.toggle('active', !isWhite);
-  document.getElementById('btn-color-white').classList.toggle('active', isWhite);
+  const u = stockingMaterial.uniforms;
+  if (mode === 'white') {
+    u.uColorMode.value = 1.0;
+    u.uFabricBaseColor.value.setRGB(0.46, 0.48, 0.52);
+    u.uFabricSheenColor.value.setRGB(0.86, 0.88, 0.92);
+  } else if (mode === 'purple') {
+    // Glossy translucent Grape Purple (葡萄紫) inspired by reference photo!
+    u.uColorMode.value = 0.72;
+    u.uFabricBaseColor.value.setRGB(0.24, 0.06, 0.36);
+    u.uFabricSheenColor.value.setRGB(0.68, 0.36, 0.88);
+  } else {
+    u.uColorMode.value = 0.0;
+    u.uFabricBaseColor.value.setRGB(0.012, 0.014, 0.018);
+    u.uFabricSheenColor.value.setRGB(0.14, 0.15, 0.18);
+  }
+  document.getElementById('btn-color-black').classList.toggle('active', mode === 'black');
+  document.getElementById('btn-color-white').classList.toggle('active', mode === 'white');
+  document.getElementById('btn-color-purple').classList.toggle('active', mode === 'purple');
 }
 
 window.addEventListener('keydown', (e) => {
@@ -504,6 +518,7 @@ document.getElementById('btn-view-01').addEventListener('click', () => switchVie
 document.getElementById('btn-view-02').addEventListener('click', () => switchView('view02'));
 document.getElementById('btn-color-black').addEventListener('click', () => setColorMode('black'));
 document.getElementById('btn-color-white').addEventListener('click', () => setColorMode('white'));
+document.getElementById('btn-color-purple').addEventListener('click', () => setColorMode('purple'));
 document.getElementById('hint-pin').addEventListener('click', togglePinHand);
 document.getElementById('hint-repair').addEventListener('click', repairAllTears);
 

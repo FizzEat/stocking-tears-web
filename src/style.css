@@ -432,6 +432,11 @@ body {
   color: #161a1e;
 }
 
+.color-btn.purple {
+  background: linear-gradient(135deg, #7c38a8, #a456d4);
+  color: #ffffff;
+}
+
 .color-btn.active {
   box-shadow: 0 0 0 2px #6fa8d6;
   border-color: #6fa8d6;

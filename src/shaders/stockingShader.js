@@ -25,7 +25,9 @@ export function createStockingMaterial() {
       uKeyLightDir: { value: new THREE.Vector3(-0.48, 0.52, 0.78).normalize() },
       uRimLightDir: { value: new THREE.Vector3(0.82, 0.25, -0.52).normalize() },
       uRimColor: { value: new THREE.Color('#7be0f5') },
-      uColorMode: { value: 0.0 }, // 0.0 = Black, 1.0 = White
+      uColorMode: { value: 0.0 }, // 0.0 = Black, 1.0 = White, 2.0 = Grape Purple
+      uFabricBaseColor: { value: new THREE.Color(0.012, 0.014, 0.018) },
+      uFabricSheenColor: { value: new THREE.Color(0.14, 0.15, 0.18) },
 
       // Group 1: Weave & Normal
       uWeaveTiling: { value: 12.0 },
@@ -99,6 +101,8 @@ export function createStockingMaterial() {
       uniform vec3 uRimLightDir;
       uniform vec3 uRimColor;
       uniform float uColorMode;
+      uniform vec3 uFabricBaseColor;
+      uniform vec3 uFabricSheenColor;
 
       uniform float uWeaveTiling;
       uniform float uWeaveNormalStrength;
@@ -283,26 +287,21 @@ export function createStockingMaterial() {
         float ladderMask = clamp(max(sdfLadderMask, vLadder * 0.4), 0.0, 1.0);
         float ladderRungs = sin(vUv.y * 740.0) * 0.5 + 0.5;
 
-        // 5. Linear-space fabric color
-        vec3 blackBase = vec3(0.012, 0.014, 0.018);
-        vec3 blackSheen = vec3(0.14, 0.15, 0.18);
-
-        vec3 whiteBase = vec3(0.46, 0.48, 0.52);
-        vec3 whiteSheen = vec3(0.86, 0.88, 0.92);
-
-        vec3 fabricBase = mix(blackBase, whiteBase, uColorMode);
-        vec3 fabricSheen = mix(blackSheen, whiteSheen, uColorMode);
+        // 5. Linear-space fabric color (supports Black, White, Grape Purple & any custom tint!)
+        vec3 fabricBase = uFabricBaseColor;
+        vec3 fabricSheen = uFabricSheenColor;
+        float isLightMode = clamp(uColorMode, 0.0, 1.0);
 
         float ndl = dot(Np, uKeyLightDir) * 0.5 + 0.5;
-        vec3 litColor = fabricBase * (0.28 + 0.80 * ndl);
+        vec3 litColor = fabricBase * (0.30 + 0.80 * ndl);
 
         litColor += fabricSheen * (microKnit - 0.5) * uWeaveContrast * 2.0;
 
-        vec3 pearlTint = mix(vec3(0.56, 0.60, 0.68), vec3(1.0, 0.99, 0.98), uColorMode);
-        litColor += pearlTint * (pearlSpec * 0.24 * uPearlStrength + pearlEdge * uPearlStrength);
-        litColor += mix(vec3(0.85, 0.90, 0.98), vec3(1.0), uColorMode) * pearlGlint * 0.52;
+        vec3 pearlTint = mix(vec3(0.56, 0.60, 0.68), fabricSheen * 1.15, isLightMode);
+        litColor += pearlTint * (pearlSpec * 0.28 * uPearlStrength + pearlEdge * uPearlStrength);
+        litColor += mix(vec3(0.85, 0.90, 0.98), vec3(1.0), isLightMode) * pearlGlint * 0.52;
 
-        vec3 wrinkleColor = mix(vec3(0.42, 0.46, 0.52), vec3(1.0, 1.0, 1.0), uColorMode);
+        vec3 wrinkleColor = mix(vec3(0.42, 0.46, 0.52), fabricSheen * 1.12, isLightMode);
         litColor = mix(litColor, wrinkleColor, clamp(wrinkle * 0.30, 0.0, 0.58));
 
         if (vBunch > 0.01) {
@@ -310,11 +309,11 @@ export function createStockingMaterial() {
         }
 
         // Subtle pale border & horizontal rungs on vertical ladder strips
-        vec3 ladderTint = mix(vec3(0.32, 0.34, 0.38), vec3(0.94, 0.95, 0.98), uColorMode);
+        vec3 ladderTint = mix(vec3(0.32, 0.34, 0.38), fabricSheen * 1.08, isLightMode);
         litColor = mix(litColor, ladderTint, sdfLadderEdge * 0.48 + ladderMask * ladderRungs * 0.12);
 
         // Crisp rolled elastic hem right around the almond tear opening
-        vec3 rimEdgeColor = mix(vec3(0.004, 0.005, 0.008), vec3(0.95, 0.96, 0.99), uColorMode);
+        vec3 rimEdgeColor = mix(fabricBase * 0.45, fabricSheen * 1.06, isLightMode * 0.5);
         litColor = mix(litColor, rimEdgeColor, tearRimMask * 0.72);
 
         // Studio cyan rim light on outer right silhouette
