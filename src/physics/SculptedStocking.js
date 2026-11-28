@@ -19,13 +19,16 @@ export async function loadSculptedLegsAndStockings(skinMaterial, stockingMateria
   const gltf = await loader.loadAsync('./models/seated_legs.glb');
 
   let sourceGeom = null;
-  let shortsGeom = null;
+  let briefGeom = null;
+  let sweaterGeom = null;
   gltf.scene.traverse((obj) => {
     if (obj.isMesh) {
       if (obj.name.includes('SeatedLegsSkin') || obj.name.includes('morphed_female.001')) {
         sourceGeom = obj.geometry;
-      } else if (obj.name.includes('DarkShorts') || obj.name.includes('morphed_female.002')) {
-        shortsGeom = obj.geometry;
+      } else if (obj.name.includes('DarkBrief') || obj.name.includes('morphed_female.002')) {
+        briefGeom = obj.geometry;
+      } else if (obj.name.includes('CreamSweater') || obj.name.includes('morphed_female.003')) {
+        sweaterGeom = obj.geometry;
       }
     }
   });
@@ -132,17 +135,30 @@ export async function loadSculptedLegsAndStockings(skinMaterial, stockingMateria
   const clothMesh = new THREE.Mesh(clothGeom, stockingMaterial);
   clothMesh.renderOrder = 2;
 
-  let shortsMesh = null;
-  if (shortsGeom) {
-    shortsGeom.computeVertexNormals();
-    const shortsMat = new THREE.MeshStandardMaterial({
-      color: '#1b1d22',
-      roughness: 0.78,
-      metalness: 0.02,
+  let briefMesh = null;
+  if (briefGeom) {
+    briefGeom.computeVertexNormals();
+    const briefMat = new THREE.MeshStandardMaterial({
+      color: '#14161a',
+      roughness: 0.62,
+      metalness: 0.04,
       side: THREE.DoubleSide,
     });
-    shortsMesh = new THREE.Mesh(shortsGeom, shortsMat);
-    shortsMesh.renderOrder = 3;
+    briefMesh = new THREE.Mesh(briefGeom, briefMat);
+    briefMesh.renderOrder = 3;
+  }
+
+  let sweaterMesh = null;
+  if (sweaterGeom) {
+    sweaterGeom.computeVertexNormals();
+    const sweaterMat = new THREE.MeshStandardMaterial({
+      color: '#e8dac6', // Cozy cream knit sweater matching reference video
+      roughness: 0.86,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
+    });
+    sweaterMesh = new THREE.Mesh(sweaterGeom, sweaterMat);
+    sweaterMesh.renderOrder = 3;
   }
 
   // Interactive controller wrapping both legs on the sculpted mesh
@@ -155,7 +171,8 @@ export async function loadSculptedLegsAndStockings(skinMaterial, stockingMateria
     skinRimAO,
     clothMesh,
     clothGeom,
-    shortsMesh,
+    briefMesh,
+    sweaterMesh,
     restPos,
     restNorm,
     vel,
@@ -289,25 +306,25 @@ export class SculptedStockingController {
       let du = Math.abs(u - t.u);
       if (du > 0.5) du = 1.0 - du;
       const dv = Math.abs(v - t.v);
-      if (du < 0.08 && dv < 0.09) {
-        t.rx = Math.min(0.042, t.rx + 0.005);
-        t.ry = Math.min(0.062, t.ry + 0.008);
-        t.ladderUp = Math.min(0.24, t.ladderUp + 0.024);
-        t.ladderDown = Math.min(0.24, t.ladderDown + 0.024);
+      if (du < 0.06 && dv < 0.07) {
+        t.rx = Math.min(0.028, t.rx + 0.0032);
+        t.ry = Math.min(0.044, t.ry + 0.0052);
+        t.ladderUp = Math.min(0.16, t.ladderUp + 0.015);
+        t.ladderDown = Math.min(0.16, t.ladderDown + 0.015);
 
         // Pop open a chained secondary almond tear along the vertical ladder!
-        if (t.ry > 0.044 && !t.chained && this.sdfTears.length < MAX_SDF_TEARS) {
+        if (t.ry > 0.032 && !t.chained && this.sdfTears.length < MAX_SDF_TEARS) {
           t.chained = true;
           const dir = Math.random() < 0.5 ? 1 : -1;
-          const v2 = Math.max(0.08, Math.min(0.90, t.v + dir * (t.ry * 2.0 + 0.036)));
+          const v2 = Math.max(0.08, Math.min(0.90, t.v + dir * (t.ry * 2.1 + 0.028)));
           this.sdfTears.push({
             side,
-            u: t.u + (Math.random() - 0.5) * 0.006,
+            u: t.u + (Math.random() - 0.5) * 0.005,
             v: v2,
-            rx: t.rx * (0.56 + Math.random() * 0.18),
-            ry: t.ry * (0.60 + Math.random() * 0.18),
-            ladderUp: 0.06 + Math.random() * 0.06,
-            ladderDown: 0.06 + Math.random() * 0.06,
+            rx: t.rx * (0.55 + Math.random() * 0.16),
+            ry: t.ry * (0.58 + Math.random() * 0.16),
+            ladderUp: 0.045 + Math.random() * 0.04,
+            ladderDown: 0.045 + Math.random() * 0.04,
             chained: false,
           });
         }
@@ -322,10 +339,10 @@ export class SculptedStockingController {
         side,
         u,
         v,
-        rx: 0.020 + Math.random() * 0.008,
-        ry: 0.032 + Math.random() * 0.012,
-        ladderUp: 0.085 + Math.random() * 0.06,
-        ladderDown: 0.085 + Math.random() * 0.06,
+        rx: 0.013 + Math.random() * 0.005,
+        ry: 0.022 + Math.random() * 0.008,
+        ladderUp: 0.055 + Math.random() * 0.045,
+        ladderDown: 0.055 + Math.random() * 0.045,
         chained: false,
       });
       this._syncTearUniforms();
@@ -344,19 +361,24 @@ export class SculptedStockingController {
     if (this.isGrabbing) {
       this.grabCurrent.lerp(this.grabTarget, Math.min(1, dt * 18));
       pullVec.subVectors(this.grabCurrent, this.grabRestPos);
-      const pullDist = pullVec.length();
+      const rawDist = pullVec.length();
+      // Clamp maximum pull stretch to realistic 12cm so cloth never distorts wildly!
+      if (rawDist > 0.12) {
+        pullVec.setLength(0.12);
+      }
 
-      // Trigger crisp almond tear & vertical ladder when pulled past threshold
-      const tearThresh = 0.125 / Math.max(0.35, this.tearSensitivity);
-      if (pullDist > tearThresh && pullDist - this.lastTearDist > 0.042) {
-        this.lastTearDist = pullDist;
+      // Trigger crisp small-to-medium almond tear & vertical ladder when pulled past threshold
+      const tearThresh = 0.075 / Math.max(0.35, this.tearSensitivity);
+      if (rawDist > tearThresh && rawDist - this.lastTearDist > 0.032) {
+        this.lastTearDist = rawDist;
         this._spawnOrGrowTear(this.grabUV.x, this.grabUV.y, this.grabSide);
       }
     } else {
       this.grabCurrent.lerp(this.grabRestPos, Math.min(1, dt * 12));
     }
 
-    const pullRadius = 0.34;
+    // Tight, realistic fingertip pinch radius (8.5cm instead of whole leg!)
+    const pullRadius = 0.085;
     const pullMag = this.isGrabbing ? pullVec.length() : 0;
     const gx = this.grabRestPos.x;
     const gy = this.grabRestPos.y;
@@ -398,21 +420,25 @@ export class SculptedStockingController {
         localBunch = env * Math.min(1.0, rolledAmt * 3.5);
       }
 
-      // 2. Real-time elastic pinch & pull displacement
+      // 2. Real-time tight outward-only fingertip pinch displacement (NEVER clips inside leg!)
       if (this.isGrabbing && side === this.grabSide && pullMag > 0.001) {
         const dx = rx - gx;
         const dy = ry - gy;
         const dz = rz - gz;
         const d = Math.hypot(dx, dy, dz);
         if (d < pullRadius) {
-          const w = Math.pow(1.0 - d / pullRadius, 2.2);
-          // Only pull outward along normal + pull vector so cloth never clips inside leg!
+          const w = Math.pow(1.0 - d / pullRadius, 2.0);
+          // Decompose pull into outward normal component (strictly >= 0) + subtle tangential glide
           const dotN = pullVec.x * nx + pullVec.y * ny + pullVec.z * nz;
-          const outPush = Math.max(0, dotN);
-          tx += (pullVec.x * 0.65 + nx * outPush * 0.45) * w;
-          ty += pullVec.y * 0.65 * w;
-          tz += (pullVec.z * 0.65 + nz * outPush * 0.45) * w;
-          localStrain = Math.min(1.4, pullMag * 4.2 * w);
+          const outN = Math.max(0.0, dotN);
+          const tanX = pullVec.x - dotN * nx;
+          const tanY = pullVec.y - dotN * ny;
+          const tanZ = pullVec.z - dotN * nz;
+
+          tx += (nx * outN * 0.85 + tanX * 0.18) * w;
+          ty += (ny * outN * 0.85 + tanY * 0.18) * w;
+          tz += (nz * outN * 0.85 + tanZ * 0.18) * w;
+          localStrain = Math.min(1.4, pullMag * 8.5 * w);
         }
       }
 

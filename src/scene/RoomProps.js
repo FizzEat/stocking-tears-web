@@ -110,46 +110,46 @@ export function createRoomProps() {
   group.add(desk);
 
   // -------------------------------------------------------------------------
-  // 3. Glossy Nude-Beige Pointed Stiletto Pump on the Wood Floor
-  // -------------------------------------------------------------------------
+  // 3. Sleek Unified Glossy Nude-Beige Pointed Stiletto Pump on the Wood Floor
   const buildStiletto = () => {
     const shoe = new THREE.Group();
 
-    // Pointed vamp / toe box
-    const vampGeom = new THREE.ConeGeometry(0.044, 0.18, 20);
+    // Smooth curved sole + pointed toe box
+    const vampGeom = new THREE.ConeGeometry(0.036, 0.16, 22);
     vampGeom.rotateX(Math.PI * 0.5);
-    vampGeom.scale(1.0, 0.56, 1.0);
+    vampGeom.scale(1.0, 0.46, 1.0);
     const vamp = new THREE.Mesh(vampGeom, heelMat);
-    vamp.position.set(0, 0.024, 0.09);
+    vamp.position.set(0, 0.017, 0.085);
     shoe.add(vamp);
 
-    // Heel cup
-    const cupGeom = new THREE.CylinderGeometry(0.032, 0.030, 0.08, 18, 1, true, Math.PI * 0.2, Math.PI * 1.6);
+    // Arched sole bridge connecting toe box to stiletto heel
+    const archGeom = new THREE.BoxGeometry(0.052, 0.008, 0.13);
+    const arch = new THREE.Mesh(archGeom, heelMat);
+    arch.position.set(0, 0.052, -0.015);
+    arch.rotation.x = 0.54;
+    shoe.add(arch);
+
+    // Sleek sculpted back heel counter
+    const cupGeom = new THREE.SphereGeometry(0.032, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55);
+    cupGeom.scale(0.88, 1.35, 1.0);
     const cup = new THREE.Mesh(cupGeom, heelMat);
-    cup.position.set(0, 0.115, -0.065);
-    cup.rotation.x = 0.22;
+    cup.position.set(0, 0.095, -0.068);
+    cup.rotation.x = -Math.PI * 0.42;
     shoe.add(cup);
 
-    // Inner dark insole liner
-    const linerGeom = new THREE.PlaneGeometry(0.052, 0.16);
-    linerGeom.rotateX(-Math.PI * 0.5 + 0.36);
-    const liner = new THREE.Mesh(linerGeom, heelInnerMat);
-    liner.position.set(0, 0.055, 0.01);
-    shoe.add(liner);
-
-    // Slender stiletto heel spike
-    const spikeGeom = new THREE.CylinderGeometry(0.009, 0.0045, 0.098, 12);
+    // Slender stiletto spike touching floor cleanly at y = 0
+    const spikeGeom = new THREE.CylinderGeometry(0.007, 0.0038, 0.092, 12);
     const spike = new THREE.Mesh(spikeGeom, heelMat);
-    spike.position.set(0, 0.049, -0.072);
+    spike.position.set(0, 0.046, -0.068);
     shoe.add(spike);
 
     return shoe;
   };
 
-  // Loose stiletto sitting casually on the floor in the foreground (just like video!)
+  // Loose stiletto sitting naturally on the floor in front of supporting foot
   const floorPump = buildStiletto();
-  floorPump.position.set(-0.08, 0.0, 0.38);
-  floorPump.rotation.y = 0.65;
+  floorPump.position.set(0.08, 0.0, 0.42);
+  floorPump.rotation.y = 0.82;
   group.add(floorPump);
 
   return group;

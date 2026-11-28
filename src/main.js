@@ -56,12 +56,13 @@ const camera = new THREE.PerspectiveCamera(
 
 const VIEWS = {
   view01: {
-    pos: new THREE.Vector3(-1.35, 0.56, 1.02),
-    target: new THREE.Vector3(0.02, 0.42, 0.22),
+    // Tight framing matching reference video: left edge crops cleanly at hip/sweater (zero empty left space!)
+    pos: new THREE.Vector3(-1.02, 0.54, 0.88),
+    target: new THREE.Vector3(0.09, 0.42, 0.28),
   },
   view02: {
-    pos: new THREE.Vector3(-0.74, 0.46, 0.76),
-    target: new THREE.Vector3(-0.04, 0.36, 0.32),
+    pos: new THREE.Vector3(-0.68, 0.44, 0.70),
+    target: new THREE.Vector3(0.02, 0.36, 0.34),
   },
 };
 
@@ -123,8 +124,11 @@ loadSculptedLegsAndStockings(skinMaterial, stockingMaterial)
     sculpted = ctrl;
     sculpted.onTear = () => foley.playTearSnap(1.0);
     characterGroup.add(sculpted.skinMesh, sculpted.clothMesh);
-    if (sculpted.shortsMesh) {
-      characterGroup.add(sculpted.shortsMesh);
+    if (sculpted.briefMesh) {
+      characterGroup.add(sculpted.briefMesh);
+    }
+    if (sculpted.sweaterMesh) {
+      characterGroup.add(sculpted.sweaterMesh);
     }
 
     studioFloor.material.uniforms.uLeftFoot.value.copy(sculpted.leftFootCenter);
