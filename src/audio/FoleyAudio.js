@@ -9,8 +9,12 @@ export class FoleyAudio {
     this.ctx = null;
     this.noiseBuffer = null;
     this.muted = false;
+    this.voiceEnabled = true;
     this.lastTearTime = 0;
     this.lastSlideTime = 0;
+    this.lastVoiceTime = 0;
+    this.voiceIndex = 0;
+    this.voiceLines = ['哥哥轻点', '哎呀，哥哥轻点啦', '轻一点，要勾丝啦'];
   }
 
   _ensureContext() {
@@ -40,6 +44,46 @@ export class FoleyAudio {
 
   setMuted(m) {
     this.muted = m;
+    if (m && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  /**
+   * Plays a cute anime-style Chinese voice reaction via Web Speech API (zero audio files needed).
+   */
+  playVoiceReaction() {
+    if (this.muted || !this.voiceEnabled) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const now = performance.now();
+    if (now - this.lastVoiceTime < 2200) return; // avoid overlapping spam
+    this.lastVoiceTime = now;
+
+    try {
+      const synth = window.speechSynthesis;
+      synth.cancel();
+
+      const text = this.voiceLines[this.voiceIndex % this.voiceLines.length];
+      this.voiceIndex++;
+
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'zh-CN';
+      utter.pitch = 1.32; // soft higher anime-like tone
+      utter.rate = 1.06;
+      utter.volume = 0.88;
+
+      const voices = synth.getVoices();
+      const zhFemale =
+        voices.find((v) => /zh/i.test(v.lang) && /tingting|xiaoxiao|meijia|sinji|female|女/i.test(v.name)) ||
+        voices.find((v) => /zh[-_]CN/i.test(v.lang)) ||
+        voices.find((v) => /zh/i.test(v.lang));
+      if (zhFemale) utter.voice = zhFemale;
+
+      synth.speak(utter);
+    } catch {
+      // Ignore speech synthesis errors on restricted browsers
+    }
   }
 
   /**

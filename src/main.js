@@ -125,7 +125,7 @@ let sculpted = null;
 loadSculptedLegsAndStockings(skinMaterial, stockingMaterial)
   .then((ctrl) => {
     sculpted = ctrl;
-    sculpted.onTear = () => foley.playTearSnap(1.0);
+    sculpted.onTear = () => onStockingTear(sculpted.grabSide || 1);
     characterGroup.add(sculpted.skinMesh, sculpted.clothMesh);
     if (sculpted.briefMesh) {
       characterGroup.add(sculpted.briefMesh);
@@ -147,6 +147,30 @@ scene.add(gloveHand.group);
 
 let customModelRoot = null;
 let customStockingCtrl = null;
+const customGroup = new THREE.Group();
+scene.add(customGroup);
+
+// Real-time spring-damper leg/body sway physics when pulling or tearing!
+const sway = {
+  rx: 0,
+  rz: 0,
+  x: 0,
+  vrx: 0,
+  vrz: 0,
+  vx: 0,
+};
+
+function kickLegSway(dirX = 1, strength = 1.0) {
+  sway.vrz += -dirX * 0.42 * strength;
+  sway.vrx += (Math.random() - 0.5) * 0.22 * strength;
+  sway.vx += dirX * 0.16 * strength;
+}
+
+function onStockingTear(side = 1) {
+  foley.playTearSnap(1.0);
+  foley.playVoiceReaction();
+  kickLegSway(side, 1.15);
+}
 
 function getActiveController() {
   return customStockingCtrl || sculpted;
@@ -479,13 +503,13 @@ glbInput.addEventListener('change', async (e) => {
   try {
     showToast(`正在加载 ${file.name} ...`);
     const model = await loadCustomGLB(file);
-    if (customModelRoot) scene.remove(customModelRoot);
+    if (customModelRoot) customGroup.remove(customModelRoot);
     if (customStockingCtrl) {
-      scene.remove(customStockingCtrl.clothMesh);
+      customGroup.remove(customStockingCtrl.clothMesh);
       customStockingCtrl = null;
     }
     customModelRoot = model;
-    scene.add(customModelRoot);
+    customGroup.add(customModelRoot);
     characterGroup.visible = false;
     roomProps.visible = false;
     resetModelBtn.classList.remove('hidden');
@@ -493,9 +517,9 @@ glbInput.addEventListener('change', async (e) => {
     // Automatically wrap real-time tearable sheer stockings onto the imported character's legs!
     customStockingCtrl = buildStockingForImportedModel(customModelRoot, stockingMaterial);
     if (customStockingCtrl) {
-      customStockingCtrl.onTear = () => foley.playTearSnap(1.0);
+      customStockingCtrl.onTear = () => onStockingTear(customStockingCtrl.grabSide || 1);
       customStockingCtrl.repair();
-      scene.add(customStockingCtrl.clothMesh);
+      customGroup.add(customStockingCtrl.clothMesh);
     }
 
     // Frame straight onto the imported character's legs!
@@ -520,13 +544,15 @@ glbInput.addEventListener('change', async (e) => {
 
 resetModelBtn.addEventListener('click', () => {
   if (customModelRoot) {
-    scene.remove(customModelRoot);
+    customGroup.remove(customModelRoot);
     customModelRoot = null;
   }
   if (customStockingCtrl) {
-    scene.remove(customStockingCtrl.clothMesh);
+    customGroup.remove(customStockingCtrl.clothMesh);
     customStockingCtrl = null;
   }
+  customGroup.position.set(0, 0, 0);
+  customGroup.rotation.set(0, 0, 0);
   characterGroup.visible = true;
   roomProps.visible = true;
   if (sculpted) sculpted.repair();
@@ -564,6 +590,33 @@ function animate() {
   const ctrl = getActiveController();
   if (ctrl) {
     ctrl.step(dt);
+
+    // Continuous spring-damper leg sway response while pulling!
+    let targetX = 0;
+    let targetRZ = 0;
+    let targetRX = 0;
+    if (ctrl.isGrabbing && isDragging) {
+      const pullDx = ctrl.grabCurrent.x - ctrl.grabRestPos.x;
+      const pullDy = ctrl.grabCurrent.y - ctrl.grabRestPos.y;
+      targetX = Math.max(-0.045, Math.min(0.045, pullDx * 0.28));
+      targetRZ = Math.max(-0.075, Math.min(0.075, -pullDx * 0.45));
+      targetRX = Math.max(-0.045, Math.min(0.045, pullDy * 0.30));
+    }
+
+    const stiffness = 68.0;
+    const damping = 7.2;
+    sway.vx += ((targetX - sway.x) * stiffness - sway.vx * damping) * dt;
+    sway.vrz += ((targetRZ - sway.rz) * stiffness - sway.vrz * damping) * dt;
+    sway.vrx += ((targetRX - sway.rx) * stiffness - sway.vrx * damping) * dt;
+
+    sway.x += sway.vx * dt;
+    sway.rz += sway.vrz * dt;
+    sway.rx += sway.vrx * dt;
+
+    const activeRoot = customStockingCtrl ? customGroup : characterGroup;
+    activeRoot.position.x = sway.x;
+    activeRoot.rotation.z = sway.rz;
+    activeRoot.rotation.x = sway.rx;
   }
 
   if (ctrl && activeRollSide !== 0 && isDragging) {
