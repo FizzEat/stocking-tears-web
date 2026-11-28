@@ -1,122 +1,114 @@
 import * as THREE from 'three';
 
 /**
- * 3D Cartoon White Gloved Hand cursor (inspired by the Sakura Rabbit demo):
- *  - Puffy white glove cuff with dark inner opening
- *  - Rounded palm with 3 classic black back-of-hand stripes
- *  - Articulated thumb + pinching index finger that smoothly closes when grabbing
- *  - Supports "Pin" mode (key 1) with a subtle cyan glow ring so the user knows it's pinned
+ * Petite Anime Chibi Kitty Paw cursor (二次元萌系小猫爪):
+ *  - Compact, cute stylized white plush paw with sakura-pink toe beans & golden bell collar
+ *  - Tiny translucent pearl-pink claws gently extend when pinching/snagging the stocking
+ *  - Supports Pin mode (key '1') with a soft lavender-pink aura ring
  */
 export class GloveHand {
   constructor() {
     this.group = new THREE.Group();
     this.group.renderOrder = 10;
 
-    // Materials
-    const gloveMat = new THREE.MeshStandardMaterial({
-      color: '#f2f4f7',
+    const furMat = new THREE.MeshStandardMaterial({
+      color: '#fff8f5',
+      roughness: 0.55,
+      metalness: 0.0,
+    });
+    const pinkPadMat = new THREE.MeshStandardMaterial({
+      color: '#ffa3be',
+      roughness: 0.35,
+      metalness: 0.04,
+    });
+    const clawMat = new THREE.MeshStandardMaterial({
+      color: '#ffeef4',
+      roughness: 0.18,
+      metalness: 0.12,
+    });
+    const ribbonMat = new THREE.MeshStandardMaterial({
+      color: '#b478e6',
       roughness: 0.42,
-      metalness: 0.02,
+      metalness: 0.08,
     });
-    const darkMat = new THREE.MeshStandardMaterial({
-      color: '#0d1014',
-      roughness: 0.9,
-    });
-    const stripeMat = new THREE.MeshStandardMaterial({
-      color: '#1b1f26',
-      roughness: 0.6,
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: '#f7d27a',
+      roughness: 0.22,
+      metalness: 0.82,
     });
 
-    // Local coordinate convention:
-    //   Origin (0, 0, 0) = exact fingertip pinch contact point!
-    //   +X points back toward the wrist/cuff so lookAt / orientation aligns cleanly.
+    // Origin (0,0,0) = exact fingertip/claw snag contact point; +X extends back toward wrist
     this.handRig = new THREE.Group();
     this.group.add(this.handRig);
 
-    // 1. Palm
-    const palmGeom = new THREE.SphereGeometry(0.056, 20, 16);
-    palmGeom.scale(1.18, 0.86, 0.62);
-    const palm = new THREE.Mesh(palmGeom, gloveMat);
-    palm.position.set(0.115, -0.005, 0);
-    this.handRig.add(palm);
+    // 1. Chibi rounded paw body (compact & petite!)
+    const pawGeom = new THREE.SphereGeometry(0.032, 20, 16);
+    pawGeom.scale(1.18, 0.88, 0.72);
+    const paw = new THREE.Mesh(pawGeom, furMat);
+    paw.position.set(0.046, 0, 0);
+    this.handRig.add(paw);
 
-    // 2. Three classic black stripes on the back of the glove
-    for (let i = -1; i <= 1; i++) {
-      const stripeGeom = new THREE.CapsuleGeometry(0.0042, 0.052, 4, 8);
-      stripeGeom.rotateZ(Math.PI * 0.5);
-      const stripe = new THREE.Mesh(stripeGeom, stripeMat);
-      stripe.position.set(0.12, i * 0.018 - 0.004, 0.032);
-      stripe.rotation.z = i * 0.08;
-      this.handRig.add(stripe);
-    }
-
-    // 3. Puffy wrist cuff
-    const cuffGeom = new THREE.TorusGeometry(0.044, 0.016, 12, 24);
-    cuffGeom.rotateY(Math.PI * 0.5);
-    const cuff = new THREE.Mesh(cuffGeom, gloveMat);
-    cuff.position.set(0.195, -0.015, 0);
-    cuff.rotation.z = -0.18;
-    this.handRig.add(cuff);
-
-    const wristGeom = new THREE.CylinderGeometry(0.044, 0.038, 0.055, 20);
+    // 2. Cute short plush arm/wrist taper
+    const wristGeom = new THREE.CylinderGeometry(0.022, 0.027, 0.046, 18);
     wristGeom.rotateZ(Math.PI * 0.5);
-    const wrist = new THREE.Mesh(wristGeom, gloveMat);
-    wrist.position.set(0.17, -0.012, 0);
-    wrist.rotation.z = -0.18;
+    const wrist = new THREE.Mesh(wristGeom, furMat);
+    wrist.position.set(0.082, 0, 0);
     this.handRig.add(wrist);
 
-    // Dark hollow inside the cuff
-    const holeGeom = new THREE.CircleGeometry(0.038, 20);
-    holeGeom.rotateY(Math.PI * 0.5);
-    const hole = new THREE.Mesh(holeGeom, darkMat);
-    hole.position.set(0.205, -0.017, 0);
-    hole.rotation.z = -0.18;
-    this.handRig.add(hole);
+    // 3. Pastel lilac collar band + tiny golden bell
+    const collarGeom = new THREE.TorusGeometry(0.024, 0.0055, 10, 22);
+    collarGeom.rotateY(Math.PI * 0.5);
+    const collar = new THREE.Mesh(collarGeom, ribbonMat);
+    collar.position.set(0.092, 0, 0);
+    this.handRig.add(collar);
 
-    // 4. Articulated Index Finger (reaches to origin 0,0,0 when pinching)
-    this.indexPivot = new THREE.Group();
-    this.indexPivot.position.set(0.072, 0.028, 0.004);
-    this.handRig.add(this.indexPivot);
+    const bell = new THREE.Mesh(new THREE.SphereGeometry(0.0085, 14, 12), goldMat);
+    bell.position.set(0.092, -0.026, 0.012);
+    this.handRig.add(bell);
 
-    const idxSeg1 = new THREE.Mesh(new THREE.CapsuleGeometry(0.0145, 0.038, 6, 12), gloveMat);
-    idxSeg1.rotation.z = Math.PI * 0.5 - 0.25;
-    idxSeg1.position.set(-0.024, 0.006, 0);
-    this.indexPivot.add(idxSeg1);
+    // 4. Center pink palm pad
+    const mainPadGeom = new THREE.SphereGeometry(0.013, 14, 12);
+    mainPadGeom.scale(0.9, 0.95, 0.45);
+    const mainPad = new THREE.Mesh(mainPadGeom, pinkPadMat);
+    mainPad.position.set(0.044, -0.002, 0.020);
+    this.handRig.add(mainPad);
 
-    const idxTip = new THREE.Mesh(new THREE.CapsuleGeometry(0.0135, 0.036, 6, 12), gloveMat);
-    idxTip.rotation.z = Math.PI * 0.5 + 0.52;
-    idxTip.position.set(-0.056, -0.011, 0);
-    this.indexPivot.add(idxTip);
+    // 5. Three cute front paw toes + sakura pink toe-beans + retractable tiny claws
+    this.claws = [];
+    const toeOffsets = [
+      { y: 0.016, z: 0.004, rot: 0.22 },
+      { y: 0.0, z: 0.008, rot: 0.0 },
+      { y: -0.016, z: 0.004, rot: -0.22 },
+    ];
 
-    // 5. Articulated Thumb (opposes index finger at origin 0,0,0)
-    this.thumbPivot = new THREE.Group();
-    this.thumbPivot.position.set(0.076, -0.034, 0.008);
-    this.handRig.add(this.thumbPivot);
+    for (const off of toeOffsets) {
+      const toe = new THREE.Mesh(new THREE.SphereGeometry(0.0115, 14, 12), furMat);
+      toe.position.set(0.016, off.y, off.z * 0.6);
+      this.handRig.add(toe);
 
-    const thumbMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.0155, 0.052, 6, 12), gloveMat);
-    thumbMesh.rotation.z = Math.PI * 0.5 - 0.42;
-    thumbMesh.position.set(-0.038, 0.014, 0);
-    this.thumbPivot.add(thumbMesh);
+      const bean = new THREE.Mesh(new THREE.SphereGeometry(0.0062, 10, 10), pinkPadMat);
+      bean.scale.set(0.85, 0.95, 0.5);
+      bean.position.set(0.014, off.y, off.z * 0.6 + 0.0095);
+      this.handRig.add(bean);
 
-    // 6. Curled middle & ring fingers tucked neatly below
-    for (let f = 0; f < 2; f++) {
-      const fMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.0135, 0.038, 6, 10), gloveMat);
-      fMesh.rotation.z = Math.PI * 0.5 + 0.35;
-      fMesh.position.set(0.068 + f * 0.008, -0.014 - f * 0.022, -0.014 - f * 0.006);
-      this.handRig.add(fMesh);
+      // Tiny curved retractable anime claw
+      const clawGeom = new THREE.ConeGeometry(0.0032, 0.015, 8);
+      clawGeom.rotateZ(Math.PI * 0.5);
+      const claw = new THREE.Mesh(clawGeom, clawMat);
+      claw.position.set(0.006, off.y, off.z * 0.5);
+      claw.rotation.z = off.rot;
+      this.handRig.add(claw);
+      this.claws.push({ mesh: claw, baseX: 0.008, extX: -0.003 });
     }
 
-    // 7. Subtle pin indicator ring (only visible when pinned with key '1')
-    const pinRingGeom = new THREE.TorusGeometry(0.052, 0.0035, 8, 28);
+    // 6. Pin indicator ring (key '1')
+    const pinRingGeom = new THREE.TorusGeometry(0.032, 0.0028, 8, 28);
     pinRingGeom.rotateY(Math.PI * 0.5);
-    this.pinRingMat = new THREE.MeshBasicMaterial({
-      color: '#6ec6f5',
-      transparent: true,
-      opacity: 0.85,
-    });
-    this.pinRing = new THREE.Mesh(pinRingGeom, this.pinRingMat);
-    this.pinRing.position.set(0.195, -0.015, 0);
-    this.pinRing.rotation.z = -0.18;
+    this.pinRing = new THREE.Mesh(
+      pinRingGeom,
+      new THREE.MeshBasicMaterial({ color: '#d49eff', transparent: true, opacity: 0.9 })
+    );
+    this.pinRing.position.set(0.092, 0, 0);
     this.pinRing.visible = false;
     this.handRig.add(this.pinRing);
 
@@ -124,7 +116,6 @@ export class GloveHand {
     this.targetPinch = 0;
     this.visible = false;
     this.group.visible = false;
-    this._targetPos = new THREE.Vector3();
     this._dirVec = new THREE.Vector3(1, 0, 0);
     this._quat = new THREE.Quaternion();
     this._xAxis = new THREE.Vector3(1, 0, 0);
@@ -139,31 +130,28 @@ export class GloveHand {
     this.group.visible = vis;
   }
 
-  /**
-   * Position the glove fingertip at `worldPos`, oriented away from the leg along `outNormal`.
-   */
   updatePose(worldPos, outNormal, isPinching, dt = 0.016) {
     this.targetPinch = isPinching ? 1.0 : 0.0;
     this.pinchAmount += (this.targetPinch - this.pinchAmount) * Math.min(1, dt * 18);
 
-    // Smoothly move fingertip to target
     this.group.position.lerp(worldPos, Math.min(1, dt * 28));
 
-    // Orient +X axis of glove along outNormal (with slight downward tilt like a natural hand)
     this._dirVec.copy(outNormal);
-    this._dirVec.y -= 0.22;
-    this._dirVec.z += 0.28;
+    this._dirVec.y -= 0.16;
+    this._dirVec.z += 0.22;
     if (this._dirVec.lengthSq() < 1e-5) {
-      this._dirVec.set(1, -0.15, 0.3);
+      this._dirVec.set(-1, -0.1, 0.3);
     }
     this._dirVec.normalize();
 
     this._quat.setFromUnitVectors(this._xAxis, this._dirVec);
     this.group.quaternion.slerp(this._quat, Math.min(1, dt * 14));
 
-    // Animate finger pinch
-    const openAngle = (1.0 - this.pinchAmount) * 0.34;
-    this.indexPivot.rotation.z = -openAngle;
-    this.thumbPivot.rotation.z = openAngle * 1.1;
+    // Gently extend tiny claws & squeeze paw slightly when snagging/tearing!
+    for (const c of this.claws) {
+      c.mesh.position.x = c.baseX + (c.extX - c.baseX) * this.pinchAmount;
+    }
+    const squeeze = 1.0 - this.pinchAmount * 0.08;
+    this.handRig.scale.set(1.0 + this.pinchAmount * 0.06, squeeze, squeeze);
   }
 }

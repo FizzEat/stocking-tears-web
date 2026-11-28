@@ -139,7 +139,7 @@ loadSculptedLegsAndStockings(skinMaterial, stockingMaterial)
   });
 
 const gloveHand = new GloveHand();
-gloveHand.group.scale.setScalar(0.75);
+gloveHand.group.scale.setScalar(0.92);
 scene.add(gloveHand.group);
 
 let customModelRoot = null;
@@ -277,26 +277,9 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), 2000);
 }
 
-function setMode(mode) {
-  if (interactionMode === mode) return;
-  interactionMode = mode;
-  isDragging = false;
-  isHandPinned = false;
-  gloveHand.setPinned(false);
-  activeRollSide = 0;
-  if (sculpted) sculpted.releaseGrab();
-
-  document.getElementById('btn-mode-tear').classList.toggle('active', mode === 'tear');
-  document.getElementById('btn-mode-roll').classList.toggle('active', mode === 'roll');
-  showToast(
-    mode === 'roll'
-      ? '脱袜子模式：左键向下拖拽即可将丝袜卷边褪下'
-      : '撕裂 / 勾丝模式：左键捏住丝袜拉扯即可起皱、撕开破口与抽丝'
-  );
-}
-
-document.getElementById('btn-mode-tear').addEventListener('click', () => setMode('tear'));
-document.getElementById('btn-mode-roll').addEventListener('click', () => setMode('roll'));
+document.getElementById('btn-mode-tear').addEventListener('click', () => {
+  showToast('左键用小猫爪捏住丝袜拉扯即可起皱、撕开破口与纵向抽丝');
+});
 
 function togglePinHand() {
   if (isHandPinned) {
