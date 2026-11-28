@@ -352,10 +352,25 @@ export class SculptedStockingController {
     this.bulgeStrength = 1.0;
     this.onTear = null;
 
+    // Instinctive startled flinch & knee-tuck recoil state (per leg!)
+    this.flinchTimer = { '-1': 10, '1': 10 };
+    this.flinchIntensity = { '-1': 0, '1': 0 };
+    this.flinchDir = { '-1': 1, '1': -1 }; // inward reflexive tuck toward centerline
+
     // Independent Roll-Down state for Left (-1) & Right (+1) legs
     this.cuffY = { '-1': STOCKING_TOP_Y, '1': STOCKING_TOP_Y };
     this.targetCuffY = { '-1': STOCKING_TOP_Y, '1': STOCKING_TOP_Y };
     this.rollSide = 0;
+  }
+
+  /**
+   * Triggers a brief, natural startled flinch & instinctive knee-tuck reflex on the snagged leg.
+   */
+  triggerFlinch(side = 1, intensity = 1.0) {
+    const key = String(side < 0 ? -1 : 1);
+    this.flinchTimer[key] = 0.0;
+    this.flinchIntensity[key] = Math.min(1.4, intensity);
+    this.flinchDir[key] = side < 0 ? 1 : -1; // tuck slightly inward & back
   }
 
   grabAtHit(hit) {
@@ -494,6 +509,24 @@ export class SculptedStockingController {
   }
 
   step(dt = 1 / 60) {
+    // Advance startled flinch & knee-tuck timers
+    this.flinchTimer['-1'] += dt;
+    this.flinchTimer['1'] += dt;
+
+    // Evaluate smooth knee-tuck & micro-shudder curve per leg:
+    // Fast attack (~0.06s) + subtle damped reflex shudder + smooth settle (~0.45s)
+    const evalFlinch = (key) => {
+      const t = this.flinchTimer[key];
+      if (t > 0.65) return { tuck: 0, shiver: 0 };
+      const amp = this.flinchIntensity[key];
+      const env = (1.0 - Math.exp(-t * 28.0)) * Math.exp(-t * 6.2) * amp;
+      const shiver = Math.sin(t * 42.0) * Math.exp(-t * 9.5) * 0.35 * amp;
+      return { tuck: env, shiver };
+    };
+    const flinchL = evalFlinch('-1');
+    const flinchR = evalFlinch('1');
+    const hasFlinch = flinchL.tuck > 0.001 || flinchR.tuck > 0.001;
+
     // Smooth roll-down cuffs
     this.cuffY['-1'] += (this.targetCuffY['-1'] - this.cuffY['-1']) * 0.22;
     this.cuffY['1'] += (this.targetCuffY['1'] - this.cuffY['1']) * 0.22;
@@ -545,6 +578,19 @@ export class SculptedStockingController {
       let tz = rz;
       let localStrain = 0;
       let localBunch = 0;
+
+      // 0. Instinctive startled flinch & knee-tuck recoil (peaks smoothly around knee/calf, 0 at hip & floor)
+      if (hasFlinch) {
+        const fl = side < 0 ? flinchL : flinchR;
+        if (fl.tuck > 0.001) {
+          // Smooth bell curve centered near knee height (y ~ 0.42), anchored at floor (y ~ 0.04) & hip (y ~ 0.78)
+          const kneeWeight = Math.exp(-Math.pow((ry - 0.42) / 0.24, 2.0)) * Math.min(1.0, Math.max(0.0, (ry - 0.04) / 0.16));
+          const inX = side < 0 ? 1 : -1;
+          tx += (inX * fl.tuck * 0.016 + inX * fl.shiver * 0.007) * kneeWeight;
+          ty += fl.tuck * 0.012 * kneeWeight;
+          tz -= (fl.tuck * 0.014 + fl.shiver * 0.005) * kneeWeight;
+        }
+      }
 
       // 1. Roll-down cuff bunching (if this leg's stocking is rolled down)
       const cY = this.cuffY[String(side)];
@@ -609,11 +655,12 @@ export class SculptedStockingController {
     this.clothGeom.attributes.aBunch.needsUpdate = true;
     this.clothGeom.computeVertexNormals();
 
-    this._updateSkinBulge();
+    this._updateSkinBulge(flinchL, flinchR, hasFlinch);
   }
 
-  _updateSkinBulge() {
-    if (!this.skinGeom || !this.skinBulge || this.sdfTears.length === 0) return;
+  _updateSkinBulge(flinchL = { tuck: 0, shiver: 0 }, flinchR = { tuck: 0, shiver: 0 }, hasFlinch = false) {
+    if (!this.skinGeom || !this.skinBulge) return;
+    if (this.sdfTears.length === 0 && !hasFlinch) return;
     const sPos = this.skinGeom.attributes.position.array;
     const maxDisp = 0.004 * this.bulgeStrength;
 
@@ -649,9 +696,22 @@ export class SculptedStockingController {
 
       const disp = this.skinBulge[i] * maxDisp;
       const i3 = i * 3;
-      sPos[i3] = this.skinRestPos[i3] + this.skinRestNorm[i3] * disp;
-      sPos[i3 + 1] = this.skinRestPos[i3 + 1] + this.skinRestNorm[i3 + 1] * disp;
-      sPos[i3 + 2] = this.skinRestPos[i3 + 2] + this.skinRestNorm[i3 + 2] * disp;
+      let fx = 0, fy = 0, fz = 0;
+      if (hasFlinch) {
+        const fl = side < 0 ? flinchL : flinchR;
+        if (fl.tuck > 0.001) {
+          const ry = this.skinRestPos[i3 + 1];
+          const kneeWeight = Math.exp(-Math.pow((ry - 0.42) / 0.24, 2.0)) * Math.min(1.0, Math.max(0.0, (ry - 0.04) / 0.16));
+          const inX = side < 0 ? 1 : -1;
+          fx = (inX * fl.tuck * 0.016 + inX * fl.shiver * 0.007) * kneeWeight;
+          fy = fl.tuck * 0.012 * kneeWeight;
+          fz = -(fl.tuck * 0.014 + fl.shiver * 0.005) * kneeWeight;
+        }
+      }
+
+      sPos[i3] = this.skinRestPos[i3] + this.skinRestNorm[i3] * disp + fx;
+      sPos[i3 + 1] = this.skinRestPos[i3 + 1] + this.skinRestNorm[i3 + 1] * disp + fy;
+      sPos[i3 + 2] = this.skinRestPos[i3 + 2] + this.skinRestNorm[i3 + 2] * disp + fz;
     }
 
     this.skinGeom.attributes.position.needsUpdate = true;

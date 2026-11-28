@@ -150,26 +150,26 @@ let customStockingCtrl = null;
 const customGroup = new THREE.Group();
 scene.add(customGroup);
 
-// Real-time spring-damper leg/body sway physics when pulling or tearing!
+// Subtle startled micro-recoil (replaces big rigid pendulum sway!)
 const sway = {
-  rx: 0,
+  y: 0,
   rz: 0,
-  x: 0,
-  vrx: 0,
+  vy: 0,
   vrz: 0,
-  vx: 0,
 };
 
-function kickLegSway(dirX = 1, strength = 1.0) {
-  sway.vrz += -dirX * 0.42 * strength;
-  sway.vrx += (Math.random() - 0.5) * 0.22 * strength;
-  sway.vx += dirX * 0.16 * strength;
+function kickStartledRecoil(side = 1, strength = 1.0) {
+  // Subtle upward startled lift & micro-recoil when snagged
+  sway.vy += 0.16 * strength;
+  sway.vrz += side * 0.08 * strength;
 }
 
 function onStockingTear(side = 1) {
   foley.playTearSnap(1.0);
   foley.playVoiceReaction();
-  kickLegSway(side, 1.15);
+  kickStartledRecoil(side, 1.0);
+  const ctrl = getActiveController();
+  if (ctrl) ctrl.triggerFlinch(side, 1.15);
 }
 
 function getActiveController() {
@@ -278,6 +278,9 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     gloveHand.setVisible(true);
   } else if (ctrl.grabAtHit(hit)) {
     isDragging = true;
+    // Slight instinctive flinch right when the stocking gets grabbed/snagged!
+    ctrl.triggerFlinch(ctrl.grabSide, 0.55);
+    kickStartledRecoil(ctrl.grabSide, 0.45);
     container.classList.add('grabbing');
     gloveHand.setVisible(true);
   }
@@ -591,32 +594,18 @@ function animate() {
   if (ctrl) {
     ctrl.step(dt);
 
-    // Continuous spring-damper leg sway response while pulling!
-    let targetX = 0;
-    let targetRZ = 0;
-    let targetRX = 0;
-    if (ctrl.isGrabbing && isDragging) {
-      const pullDx = ctrl.grabCurrent.x - ctrl.grabRestPos.x;
-      const pullDy = ctrl.grabCurrent.y - ctrl.grabRestPos.y;
-      targetX = Math.max(-0.045, Math.min(0.045, pullDx * 0.28));
-      targetRZ = Math.max(-0.075, Math.min(0.075, -pullDx * 0.45));
-      targetRX = Math.max(-0.045, Math.min(0.045, pullDy * 0.30));
-    }
+    // Subtle damped startled micro-recoil settling cleanly back to rest
+    const stiffness = 120.0;
+    const damping = 12.5;
+    sway.vy += (-sway.y * stiffness - sway.vy * damping) * dt;
+    sway.vrz += (-sway.rz * stiffness - sway.vrz * damping) * dt;
 
-    const stiffness = 68.0;
-    const damping = 7.2;
-    sway.vx += ((targetX - sway.x) * stiffness - sway.vx * damping) * dt;
-    sway.vrz += ((targetRZ - sway.rz) * stiffness - sway.vrz * damping) * dt;
-    sway.vrx += ((targetRX - sway.rx) * stiffness - sway.vrx * damping) * dt;
-
-    sway.x += sway.vx * dt;
+    sway.y += sway.vy * dt;
     sway.rz += sway.vrz * dt;
-    sway.rx += sway.vrx * dt;
 
     const activeRoot = customStockingCtrl ? customGroup : characterGroup;
-    activeRoot.position.x = sway.x;
+    activeRoot.position.y = Math.max(0, sway.y);
     activeRoot.rotation.z = sway.rz;
-    activeRoot.rotation.x = sway.rx;
   }
 
   if (ctrl && activeRollSide !== 0 && isDragging) {
