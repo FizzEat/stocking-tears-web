@@ -139,7 +139,7 @@ loadSculptedLegsAndStockings(skinMaterial, stockingMaterial)
   });
 
 const gloveHand = new GloveHand();
-gloveHand.group.scale.setScalar(0.92);
+gloveHand.group.scale.setScalar(0.46);
 scene.add(gloveHand.group);
 
 let customModelRoot = null;
