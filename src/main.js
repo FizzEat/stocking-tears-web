@@ -29,19 +29,20 @@ container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 
-const ambientLight = new THREE.AmbientLight('#8aa3b8', 0.55);
+// Warm sunlit indoor studio lighting (matching natural room daylight!)
+const ambientLight = new THREE.AmbientLight('#ffeede', 0.72);
 scene.add(ambientLight);
 
-const keyLight = new THREE.DirectionalLight('#fff2e8', 2.05);
-keyLight.position.set(-2.2, 2.4, 3.0);
+const keyLight = new THREE.DirectionalLight('#fff6eb', 1.95);
+keyLight.position.set(-2.0, 2.5, 3.0);
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight('#7be0f5', 1.85);
-rimLight.position.set(2.8, 0.9, -1.8);
+const rimLight = new THREE.DirectionalLight('#ffe4c8', 1.25);
+rimLight.position.set(2.6, 1.1, -1.8);
 scene.add(rimLight);
 
-const fillLight = new THREE.DirectionalLight('#b7c9d9', 0.65);
-fillLight.position.set(0.8, -1.5, 2.6);
+const fillLight = new THREE.DirectionalLight('#f5dfd0', 0.65);
+fillLight.position.set(0.8, -1.2, 2.6);
 scene.add(fillLight);
 
 // ---------------------------------------------------------------------------
@@ -116,10 +117,10 @@ const foley = new FoleyAudio();
 const characterGroup = new THREE.Group();
 scene.add(characterGroup);
 
-// Tailored pleated sailor skirt matching MakeHuman graceful standing hip dimensions
+// Tailored pleated sailor skirt matching slender standing hip dimensions
 const skirt = createPleatedSkirt();
-skirt.scale.set(1.16, 1.0, 1.12);
-skirt.position.set(0, 0.05, 0.02);
+skirt.scale.set(1.04, 1.0, 1.02);
+skirt.position.set(0, 0.06, 0.02);
 characterGroup.add(skirt);
 
 const studioFloor = createStudioFloor();
@@ -493,19 +494,36 @@ function setColorMode(mode) {
     u.uColorMode.value = 1.0;
     u.uFabricBaseColor.value.setRGB(0.46, 0.48, 0.52);
     u.uFabricSheenColor.value.setRGB(0.86, 0.88, 0.92);
+    u.uFrostCoverage.value = 0.68;
   } else if (mode === 'purple') {
-    // Glossy translucent Grape Purple (葡萄紫) inspired by reference photo!
+    // 🍇 葡萄紫 — glossy sheer candy-jelly grape violet
     u.uColorMode.value = 0.72;
-    u.uFabricBaseColor.value.setRGB(0.24, 0.06, 0.36);
-    u.uFabricSheenColor.value.setRGB(0.68, 0.36, 0.88);
+    u.uFabricBaseColor.value.setRGB(0.26, 0.07, 0.38);
+    u.uFabricSheenColor.value.setRGB(0.76, 0.44, 0.95);
+    u.uFrostCoverage.value = 0.54;
+  } else if (mode === 'pink') {
+    // 🍑 蜜桃粉 — glossy sheer candy-jelly peach pink
+    u.uColorMode.value = 0.78;
+    u.uFabricBaseColor.value.setRGB(0.62, 0.14, 0.28);
+    u.uFabricSheenColor.value.setRGB(0.98, 0.52, 0.68);
+    u.uFrostCoverage.value = 0.52;
+  } else if (mode === 'green') {
+    // 🍏 青苹果 — glossy sheer candy-jelly green apple
+    u.uColorMode.value = 0.76;
+    u.uFabricBaseColor.value.setRGB(0.18, 0.44, 0.10);
+    u.uFabricSheenColor.value.setRGB(0.62, 0.92, 0.38);
+    u.uFrostCoverage.value = 0.52;
   } else {
     u.uColorMode.value = 0.0;
     u.uFabricBaseColor.value.setRGB(0.012, 0.014, 0.018);
     u.uFabricSheenColor.value.setRGB(0.14, 0.15, 0.18);
+    u.uFrostCoverage.value = 0.76;
   }
   document.getElementById('btn-color-black').classList.toggle('active', mode === 'black');
   document.getElementById('btn-color-white').classList.toggle('active', mode === 'white');
   document.getElementById('btn-color-purple').classList.toggle('active', mode === 'purple');
+  document.getElementById('btn-color-pink').classList.toggle('active', mode === 'pink');
+  document.getElementById('btn-color-green').classList.toggle('active', mode === 'green');
 }
 
 window.addEventListener('keydown', (e) => {
@@ -519,6 +537,8 @@ document.getElementById('btn-view-02').addEventListener('click', () => switchVie
 document.getElementById('btn-color-black').addEventListener('click', () => setColorMode('black'));
 document.getElementById('btn-color-white').addEventListener('click', () => setColorMode('white'));
 document.getElementById('btn-color-purple').addEventListener('click', () => setColorMode('purple'));
+document.getElementById('btn-color-pink').addEventListener('click', () => setColorMode('pink'));
+document.getElementById('btn-color-green').addEventListener('click', () => setColorMode('green'));
 document.getElementById('hint-pin').addEventListener('click', togglePinHand);
 document.getElementById('hint-repair').addEventListener('click', repairAllTears);
 

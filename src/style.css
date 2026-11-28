@@ -11,9 +11,9 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: radial-gradient(circle at 48% 45%, #243642 0%, #15212a 55%, #0c141a 100%);
+  background: radial-gradient(circle at 46% 38%, #6a5646 0%, #3d3128 52%, #231b16 100%);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  color: #e6eef4;
+  color: #f4eee9;
 }
 
 #canvas-container {
@@ -433,8 +433,18 @@ body {
 }
 
 .color-btn.purple {
-  background: linear-gradient(135deg, #7c38a8, #a456d4);
+  background: linear-gradient(135deg, #8a44ba, #b873e8);
   color: #ffffff;
+}
+
+.color-btn.pink {
+  background: linear-gradient(135deg, #e86c8e, #f79ab4);
+  color: #ffffff;
+}
+
+.color-btn.green {
+  background: linear-gradient(135deg, #74b84a, #a6db6c);
+  color: #16240e;
 }
 
 .color-btn.active {

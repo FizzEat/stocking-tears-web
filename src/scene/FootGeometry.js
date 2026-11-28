@@ -270,24 +270,24 @@ export function createStudioFloor() {
 
       void main() {
         vec2 p = vWorldPos.xz;
-        float grain = noise(p * 6.5) * 0.55 + noise(p * 18.0) * 0.25 + noise(p * 42.0) * 0.20;
+        // Subtle warm oak wood-plank grain matching sunlit indoor room
+        float plank = sin(p.x * 26.0) * 0.025;
+        float grain = noise(vec2(p.x * 24.0, p.y * 4.5)) * 0.65 + noise(p * 18.0) * 0.35;
 
-        vec3 baseCol = vec3(0.32, 0.35, 0.40) * (0.90 + 0.18 * grain);
-        float warmLeft = exp(-dot(p - vec2(-0.52, 0.32), p - vec2(-0.52, 0.32)) * 1.4);
-        float coolRight = exp(-dot(p - vec2(0.55, 0.15), p - vec2(0.55, 0.15)) * 1.1);
-        baseCol += vec3(0.28, 0.17, 0.17) * warmLeft * 0.50;
-        baseCol += vec3(0.09, 0.16, 0.22) * coolRight * 0.42;
+        vec3 baseCol = vec3(0.54, 0.43, 0.34) * (0.90 + 0.16 * grain + plank);
+        float sunGlow = exp(-dot(p - vec2(-0.35, 0.45), p - vec2(-0.35, 0.45)) * 0.85);
+        baseCol += vec3(0.26, 0.21, 0.15) * sunGlow * 0.55;
 
-        vec2 dL = (p - uLeftFoot) / vec2(0.105, 0.205);
-        vec2 dR = (p - uRightFoot) / vec2(0.105, 0.205);
+        vec2 dL = (p - uLeftFoot) / vec2(0.095, 0.195);
+        vec2 dR = (p - uRightFoot) / vec2(0.095, 0.195);
         float shadowL = exp(-dot(dL, dL) * 2.2);
         float shadowR = exp(-dot(dR, dR) * 2.2);
-        float contactShadow = clamp(max(shadowL, shadowR) * 0.78, 0.0, 0.82);
+        float contactShadow = clamp(max(shadowL, shadowR) * 0.68, 0.0, 0.74);
         baseCol *= (1.0 - contactShadow);
 
-        // Soft seamless fade into studio backdrop (eliminates harsh horizon line!)
+        // Soft seamless fade into warm sunlit cream-wood indoor backdrop
         float dist = length(p);
-        float alpha = smoothstep(3.4, 0.65, dist);
+        float alpha = smoothstep(3.8, 0.65, dist);
 
         gl_FragColor = vec4(baseCol, alpha);
         #include <tonemapping_fragment>

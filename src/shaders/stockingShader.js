@@ -22,34 +22,34 @@ export function createStockingMaterial() {
     depthWrite: false,
     side: THREE.DoubleSide,
     uniforms: {
-      uKeyLightDir: { value: new THREE.Vector3(-0.48, 0.52, 0.78).normalize() },
-      uRimLightDir: { value: new THREE.Vector3(0.82, 0.25, -0.52).normalize() },
-      uRimColor: { value: new THREE.Color('#7be0f5') },
-      uColorMode: { value: 0.0 }, // 0.0 = Black, 1.0 = White, 2.0 = Grape Purple
-      uFabricBaseColor: { value: new THREE.Color(0.012, 0.014, 0.018) },
-      uFabricSheenColor: { value: new THREE.Color(0.14, 0.15, 0.18) },
+      uKeyLightDir: { value: new THREE.Vector3(-0.42, 0.56, 0.72).normalize() },
+      uRimLightDir: { value: new THREE.Vector3(0.78, 0.34, -0.52).normalize() },
+      uRimColor: { value: new THREE.Color('#ffeedd') },
+      uColorMode: { value: 0.72 }, // Default: silky candy-jelly sheer!
+      uFabricBaseColor: { value: new THREE.Color(0.26, 0.07, 0.38) },
+      uFabricSheenColor: { value: new THREE.Color(0.76, 0.44, 0.95) },
 
-      // Group 1: Weave & Normal
-      uWeaveTiling: { value: 14.0 },
-      uWeaveNormalStrength: { value: 0.72 },
-      uWeaveContrast: { value: 0.018 },
+      // Group 1: Weave & Normal (ultra-fine silky weave, zero blocky grid!)
+      uWeaveTiling: { value: 18.0 },
+      uWeaveNormalStrength: { value: 0.35 },
+      uWeaveContrast: { value: 0.010 },
 
       // Group 2: Tension & Wrinkles
-      uWrinkleStrength: { value: 1.2 },
-      uTensionNormalBoost: { value: 1.5 },
+      uWrinkleStrength: { value: 1.1 },
+      uTensionNormalBoost: { value: 1.4 },
 
-      // Group 3: Pearl & Glint
-      uPearlStrength: { value: 0.42 },
+      // Group 3: Pearl & Glint (glossy candy-jelly sheen + subtle pinpoint glints)
+      uPearlStrength: { value: 0.58 },
       uPearlGrainScale: { value: 570.0 },
-      uPearlSpecularStrength: { value: 0.64 },
-      uPearlEdgeStrength: { value: 0.14 },
-      uPearlGlintStrength: { value: 0.85 },
-      uPearlGlintDensity: { value: 0.115 },
+      uPearlSpecularStrength: { value: 0.92 },
+      uPearlEdgeStrength: { value: 0.18 },
+      uPearlGlintStrength: { value: 0.45 },
+      uPearlGlintDensity: { value: 0.08 },
 
-      // Group 4: Frost & Sheerness
-      uFrostCoverage: { value: 0.83 },
+      // Group 4: Frost & Sheerness (sheer enough that warm porcelain skin glows right through!)
+      uFrostCoverage: { value: 0.54 },
       uFrostClearAtStretch: { value: 1.0 },
-      uFrostMatteSmoothness: { value: 0.84 },
+      uFrostMatteSmoothness: { value: 0.92 },
 
       // Analytical Per-Pixel SDF Tears & Vertical Ladders
       uTearCount: { value: 0 },
