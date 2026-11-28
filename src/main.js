@@ -471,7 +471,15 @@ glbInput.addEventListener('change', async (e) => {
     characterGroup.visible = false;
     roomProps.visible = false;
     resetModelBtn.classList.remove('hidden');
-    showToast(`已导入 ${file.name}`);
+    // Smoothly frame the newly imported full-body 3D model!
+    cameraTransition = {
+      startPos: camera.position.clone(),
+      startTarget: controls.target.clone(),
+      endPos: new THREE.Vector3(0.0, 0.95, 2.85),
+      endTarget: new THREE.Vector3(0.0, 0.85, 0.0),
+      t: 0,
+    };
+    showToast(`已导入 ${file.name}（右键可 360° 旋转观察）`);
   } catch (err) {
     console.error(err);
     showToast('模型加载失败，请确认是有效的 .glb / .gltf 文件');

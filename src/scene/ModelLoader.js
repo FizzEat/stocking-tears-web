@@ -24,13 +24,14 @@ export function loadCustomGLB(file) {
         box.getCenter(center);
 
         const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
-        const targetSize = 2.25;
+        const targetSize = 1.68;
         const scale = targetSize / maxDim;
 
         root.scale.setScalar(scale);
+        // Center X/Z and place feet flush on floor y = 0.0
         root.position.set(
           -center.x * scale,
-          -center.y * scale - 0.12,
+          -box.min.y * scale,
           -center.z * scale
         );
 
