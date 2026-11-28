@@ -1,18 +1,16 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createPleatedSkirt } from './scene/ProceduralCharacter.js';
 import { createStudioFloor } from './scene/FootGeometry.js';
+import { createRoomProps } from './scene/RoomProps.js';
 import { createSkinMaterial } from './shaders/skinShader.js';
 import { createStockingMaterial } from './shaders/stockingShader.js';
 import { loadSculptedLegsAndStockings } from './physics/SculptedStocking.js';
-import { OuterSock } from './physics/OuterSock.js';
-import { RibbonBow } from './physics/RibbonBow.js';
 import { GloveHand } from './scene/GloveHand.js';
 import { loadCustomGLB } from './scene/ModelLoader.js';
 import { FoleyAudio } from './audio/FoleyAudio.js';
 
 // ---------------------------------------------------------------------------
-// 1. Renderer, Scene & Studio Lighting
+// 1. Renderer, Scene & Warm Sunlit Indoor Room Lighting
 // ---------------------------------------------------------------------------
 const container = document.getElementById('canvas-container');
 
@@ -29,48 +27,41 @@ container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 
-// Warm sunlit indoor studio lighting (matching natural room daylight!)
-const ambientLight = new THREE.AmbientLight('#ffeede', 0.72);
+const ambientLight = new THREE.AmbientLight('#ffeede', 0.78);
 scene.add(ambientLight);
 
 const keyLight = new THREE.DirectionalLight('#fff6eb', 1.95);
-keyLight.position.set(-2.0, 2.5, 3.0);
+keyLight.position.set(-2.0, 2.5, 2.8);
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight('#ffe4c8', 1.25);
-rimLight.position.set(2.6, 1.1, -1.8);
+const rimLight = new THREE.DirectionalLight('#ffe4c8', 1.15);
+rimLight.position.set(2.4, 1.2, -1.6);
 scene.add(rimLight);
 
 const fillLight = new THREE.DirectionalLight('#f5dfd0', 0.65);
-fillLight.position.set(0.8, -1.2, 2.6);
+fillLight.position.set(0.6, 0.4, 2.4);
 scene.add(fillLight);
 
 // ---------------------------------------------------------------------------
-// 2. Camera & OrbitControls (VIEW 01 = Thighs/Skirt, VIEW 02 = Calf/Ankle/Feet)
+// 2. Camera & OrbitControls
+//    VIEW 01 = Exact Side-3/4 Seated Pose matching reference video!
+//    VIEW 02 = Close-up on elevated slender leg & petite stockinged foot!
 // ---------------------------------------------------------------------------
 const camera = new THREE.PerspectiveCamera(
   34,
   window.innerWidth / window.innerHeight,
-  0.05,
-  50
+  0.04,
+  40
 );
 
 const VIEWS = {
   view01: {
-    pos: new THREE.Vector3(0.04, -0.04, 2.65),
-    target: new THREE.Vector3(0.0, -0.08, 0.0),
+    pos: new THREE.Vector3(-1.35, 0.56, 1.02),
+    target: new THREE.Vector3(0.02, 0.42, 0.22),
   },
   view02: {
-    pos: new THREE.Vector3(-0.28, -1.18, 1.46),
-    target: new THREE.Vector3(-0.24, -1.36, 0.12),
-  },
-  stage1Socks: {
-    pos: new THREE.Vector3(0.04, -0.84, 2.35),
-    target: new THREE.Vector3(0.0, -1.06, 0.0),
-  },
-  stage3Ribbon: {
-    pos: new THREE.Vector3(0.04, 0.58, 1.72),
-    target: new THREE.Vector3(0.0, 0.54, 0.25),
+    pos: new THREE.Vector3(-0.74, 0.46, 0.76),
+    target: new THREE.Vector3(-0.04, 0.36, 0.32),
   },
 };
 
@@ -80,10 +71,10 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.07;
 controls.target.copy(VIEWS.view01.target);
-controls.minDistance = 0.75;
-controls.maxDistance = 4.8;
-controls.maxPolarAngle = Math.PI * 0.84;
-controls.minPolarAngle = Math.PI * 0.16;
+controls.minDistance = 0.55;
+controls.maxDistance = 3.6;
+controls.maxPolarAngle = Math.PI * 0.85;
+controls.minPolarAngle = Math.PI * 0.14;
 
 controls.mouseButtons = {
   LEFT: null,
@@ -108,7 +99,7 @@ function switchView(viewKey) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Real Sculpted CC0 MakeHuman Legs & Delicate Feet + Skirt + Floor
+// 3. Seated Sculpted Legs & Delicate Feet + Cozy Room Props + Floor
 // ---------------------------------------------------------------------------
 const skinMaterial = createSkinMaterial();
 const stockingMaterial = createStockingMaterial();
@@ -117,14 +108,14 @@ const foley = new FoleyAudio();
 const characterGroup = new THREE.Group();
 scene.add(characterGroup);
 
-// Tailored pleated sailor skirt matching slender standing hip dimensions
-const skirt = createPleatedSkirt();
-skirt.scale.set(1.04, 1.0, 1.02);
-skirt.position.set(0, 0.06, 0.02);
-characterGroup.add(skirt);
-
+// Warm sunlit oak wood floor grounded at y = 0.0
 const studioFloor = createStudioFloor();
+studioFloor.position.y = 0.0;
 scene.add(studioFloor);
+
+// Brass-frame chair, warm oak desk & glossy nude stiletto pump on floor
+const roomProps = createRoomProps();
+scene.add(roomProps);
 
 let sculpted = null;
 loadSculptedLegsAndStockings(skinMaterial, stockingMaterial)
@@ -132,58 +123,27 @@ loadSculptedLegsAndStockings(skinMaterial, stockingMaterial)
     sculpted = ctrl;
     sculpted.onTear = () => foley.playTearSnap(1.0);
     characterGroup.add(sculpted.skinMesh, sculpted.clothMesh);
+    if (sculpted.shortsMesh) {
+      characterGroup.add(sculpted.shortsMesh);
+    }
 
-    // Align studio floor contact shadows directly underneath the real sculpted feet!
     studioFloor.material.uniforms.uLeftFoot.value.copy(sculpted.leftFootCenter);
     studioFloor.material.uniforms.uRightFoot.value.copy(sculpted.rightFootCenter);
   })
   .catch((err) => {
-    console.error('Failed to load sculpted_legs.glb:', err);
+    console.error('Failed to load seated_legs.glb:', err);
   });
 
-// Stage 1: Outer Ribbed Knit Socks (aligned to sculpted calves)
-const leftOuterSock = new OuterSock(-1);
-const rightOuterSock = new OuterSock(1);
-const outerSockGroup = new THREE.Group();
-outerSockGroup.add(leftOuterSock.mesh, rightOuterSock.mesh);
-outerSockGroup.scale.set(1.38, 1.0, 1.15);
-outerSockGroup.visible = false;
-scene.add(outerSockGroup);
-
-// Stage 3: Interactive Satin Ribbon Bow on pleated skirt waist
-const ribbonBow = new RibbonBow();
-ribbonBow.anchorPos.set(0.0, 0.66, 0.42);
-ribbonBow.reset();
-ribbonBow.group.visible = false;
-scene.add(ribbonBow.group);
-
 const gloveHand = new GloveHand();
+gloveHand.group.scale.setScalar(0.75);
 scene.add(gloveHand.group);
 
-// Subtle pulsing 3D guide ring for Challenge Mode
-const guideRing = new THREE.Mesh(
-  new THREE.RingGeometry(0.032, 0.044, 32),
-  new THREE.MeshBasicMaterial({
-    color: '#7be0f5',
-    transparent: true,
-    opacity: 0.72,
-    side: THREE.DoubleSide,
-    depthTest: false,
-  })
-);
-guideRing.renderOrder = 9;
-guideRing.visible = false;
-scene.add(guideRing);
-
-let prevSockLRemoved = false;
-let prevSockRRemoved = false;
 let customModelRoot = null;
 
 // ---------------------------------------------------------------------------
-// 4. Interaction State ('challenge' | 'tear' | 'roll')
+// 4. Interaction State ('tear' | 'roll')
 // ---------------------------------------------------------------------------
 let interactionMode = 'tear';
-let challengeStage = 1;
 
 const raycaster = new THREE.Raycaster();
 const pointerNDC = new THREE.Vector2();
@@ -192,17 +152,15 @@ const dragIntersect = new THREE.Vector3();
 
 let isDragging = false;
 let isHandPinned = false;
-let activeOuterSock = null;
-let activeRibbonPull = false;
 let activeRollSide = 0;
 let rollDragOffsetY = 0;
 
 let hoverPoint = new THREE.Vector3();
-let hoverNormal = new THREE.Vector3(1, 0, 0);
+let hoverNormal = new THREE.Vector3(-1, 0, 0);
 let isHoveringCloth = false;
 
 const _grabWorldPos = new THREE.Vector3();
-const _outNormal = new THREE.Vector3(1, 0, 0);
+const _outNormal = new THREE.Vector3(-1, 0, 0);
 
 function updatePointerNDC(event) {
   const rect = renderer.domElement.getBoundingClientRect();
@@ -210,75 +168,42 @@ function updatePointerNDC(event) {
   pointerNDC.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 }
 
-function raycastInteractive() {
-  raycaster.setFromCamera(pointerNDC, camera);
-
-  if (interactionMode === 'challenge') {
-    if (challengeStage === 1 && outerSockGroup.visible) {
-      const targets = [];
-      if (!leftOuterSock.removed) targets.push(leftOuterSock.mesh);
-      if (!rightOuterSock.removed) targets.push(rightOuterSock.mesh);
-      const hits = raycaster.intersectObjects(targets, false);
-      return hits.length > 0 ? { kind: 'outerSock', hit: hits[0] } : null;
-    }
-    if (challengeStage === 2 && sculpted) {
-      const hits = raycaster.intersectObject(sculpted.clothMesh, false);
-      return hits.length > 0 ? { kind: 'stocking', hit: hits[0] } : null;
-    }
-    if (challengeStage === 3 && ribbonBow.group.visible && !ribbonBow.untied) {
-      const hits = raycaster.intersectObjects(ribbonBow.getInteractiveMeshes(), false);
-      return hits.length > 0 ? { kind: 'ribbon', hit: hits[0] } : null;
-    }
-    return null;
-  }
-
+function raycastCloth() {
   if (!sculpted || !characterGroup.visible) return null;
+  raycaster.setFromCamera(pointerNDC, camera);
   const hits = raycaster.intersectObject(sculpted.clothMesh, false);
-  return hits.length > 0 ? { kind: 'stocking', hit: hits[0] } : null;
+  return hits.length > 0 ? hits[0] : null;
 }
 
 function computeOutwardNormal(worldPos, out = new THREE.Vector3()) {
-  const side = worldPos.x < 0 ? -1 : 1;
-  const cx = side * 0.34;
-  out.set(worldPos.x - cx, 0.0, worldPos.z);
-  if (out.lengthSq() < 1e-5) out.set(side, 0, 0.5);
+  out.subVectors(camera.position, worldPos);
+  out.y *= 0.25;
+  if (out.lengthSq() < 1e-5) out.set(-1, 0, 0.5);
   return out.normalize();
 }
 
 renderer.domElement.addEventListener('pointermove', (e) => {
   updatePointerNDC(e);
 
-  if (isDragging) {
+  if (isDragging && sculpted) {
     raycaster.setFromCamera(pointerNDC, camera);
     if (raycaster.ray.intersectPlane(dragPlane, dragIntersect)) {
-      if (activeOuterSock) {
-        activeOuterSock.pullTo(dragIntersect.y + rollDragOffsetY, dragIntersect);
-        foley.playFabricSlide(0.55);
-      } else if (activeRibbonPull) {
-        ribbonBow.dragPull(dragIntersect);
-        foley.playFabricSlide(0.75);
-      } else if (sculpted) {
-        if (activeRollSide !== 0) {
-          sculpted.pullCuff(activeRollSide, dragIntersect.y + rollDragOffsetY);
-          foley.playFabricSlide(0.6);
-        } else if (sculpted.isGrabbing) {
-          dragIntersect.y = Math.max(-1.62, Math.min(0.62, dragIntersect.y));
-          sculpted.setGrabTarget(dragIntersect);
-        }
+      if (activeRollSide !== 0) {
+        sculpted.pullCuff(activeRollSide, dragIntersect.y + rollDragOffsetY);
+        foley.playFabricSlide(0.6);
+      } else if (sculpted.isGrabbing) {
+        dragIntersect.y = Math.max(0.02, Math.min(0.92, dragIntersect.y));
+        sculpted.setGrabTarget(dragIntersect);
       }
     }
     return;
   }
 
-  const res = raycastInteractive();
-  if (res) {
+  const hit = raycastCloth();
+  if (hit) {
     isHoveringCloth = true;
-    hoverPoint.copy(res.hit.point);
-    if (res.kind === 'ribbon') {
-      hoverNormal.set(0.2, 0.0, 1.0).normalize();
-    } else {
-      computeOutwardNormal(res.hit.point, hoverNormal);
-    }
+    hoverPoint.copy(hit.point);
+    computeOutwardNormal(hit.point, hoverNormal);
     container.classList.add('hover-cloth');
     if (!isHandPinned) gloveHand.setVisible(true);
   } else {
@@ -292,10 +217,10 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
   updatePointerNDC(e);
 
-  const res = raycastInteractive();
-  if (!res) return;
+  const hit = raycastCloth();
+  if (!hit || !sculpted) return;
 
-  if (isHandPinned && sculpted) {
+  if (isHandPinned) {
     sculpted.releaseGrab();
     isHandPinned = false;
     gloveHand.setPinned(false);
@@ -303,43 +228,19 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 
   const camDir = new THREE.Vector3();
   camera.getWorldDirection(camDir);
-  dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), res.hit.point);
+  dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), hit.point);
 
-  if (res.kind === 'outerSock') {
-    const sock = res.hit.object.userData.outerSock;
-    activeOuterSock = sock;
+  if (interactionMode === 'roll') {
+    activeRollSide = hit.point.x < 0 ? -1 : 1;
+    rollDragOffsetY = sculpted.cuffY[String(activeRollSide)] - hit.point.y;
+    sculpted.pullCuff(activeRollSide, sculpted.cuffY[String(activeRollSide)]);
     isDragging = true;
-    rollDragOffsetY = sock.cuffY - res.hit.point.y;
-    sock.pullTo(sock.cuffY, res.hit.point);
     container.classList.add('grabbing');
     gloveHand.setVisible(true);
-    return;
-  }
-
-  if (res.kind === 'ribbon') {
-    const tailSide = res.hit.object.userData.ribbonTail || 1;
-    if (ribbonBow.startPull(tailSide, res.hit.point)) {
-      activeRibbonPull = true;
-      isDragging = true;
-      container.classList.add('grabbing');
-      gloveHand.setVisible(true);
-    }
-    return;
-  }
-
-  if (sculpted) {
-    if (interactionMode === 'roll' || (interactionMode === 'challenge' && challengeStage === 2)) {
-      activeRollSide = res.hit.point.x < 0 ? -1 : 1;
-      rollDragOffsetY = sculpted.cuffY[String(activeRollSide)] - res.hit.point.y;
-      sculpted.pullCuff(activeRollSide, sculpted.cuffY[String(activeRollSide)]);
-      isDragging = true;
-      container.classList.add('grabbing');
-      gloveHand.setVisible(true);
-    } else if (sculpted.grabAtHit(res.hit)) {
-      isDragging = true;
-      container.classList.add('grabbing');
-      gloveHand.setVisible(true);
-    }
+  } else if (sculpted.grabAtHit(hit)) {
+    isDragging = true;
+    container.classList.add('grabbing');
+    gloveHand.setVisible(true);
   }
 });
 
@@ -348,14 +249,6 @@ function endDrag() {
   isDragging = false;
   container.classList.remove('grabbing');
 
-  if (activeOuterSock) {
-    activeOuterSock.releaseGrip();
-    activeOuterSock = null;
-  }
-  if (activeRibbonPull) {
-    ribbonBow.releasePull();
-    activeRibbonPull = false;
-  }
   if (activeRollSide !== 0 && sculpted) {
     sculpted.releaseCuff();
     activeRollSide = 0;
@@ -369,7 +262,7 @@ window.addEventListener('pointerup', endDrag);
 window.addEventListener('pointercancel', endDrag);
 
 // ---------------------------------------------------------------------------
-// 5. Mode Switcher, Challenge HUD, Inspector Sliders & Presets
+// 5. Mode Switcher, Color Palette, Inspector Sliders & Presets
 // ---------------------------------------------------------------------------
 let toastTimer = null;
 function showToast(msg) {
@@ -380,89 +273,26 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), 2000);
 }
 
-const challengeHud = document.getElementById('challenge-hud');
-const challengeGoalEl = document.getElementById('challenge-goal');
-const challengeFillEl = document.getElementById('challenge-progress-fill');
-const challengeTextEl = document.getElementById('challenge-progress-text');
-
-function updateChallengeHUD(progress01) {
-  const pct = Math.round(Math.max(0, Math.min(1, progress01)) * 100);
-  challengeFillEl.style.width = `${pct}%`;
-  challengeTextEl.textContent = `${pct}%`;
-
-  const s1 = document.getElementById('step-1');
-  const s2 = document.getElementById('step-2');
-  const s3 = document.getElementById('step-3');
-
-  s1.className = 'stage-pill' + (challengeStage === 1 ? ' active' : challengeStage > 1 ? ' done' : '');
-  s2.className = 'stage-pill' + (challengeStage === 2 ? ' active' : challengeStage > 2 ? ' done' : '');
-  s3.className = 'stage-pill' + (challengeStage === 3 ? ' active' : challengeStage > 3 ? ' done' : '');
-
-  if (challengeStage === 1) {
-    challengeGoalEl.textContent = '第 1 关：向下拖拽褪下左右腿的针织短袜';
-  } else if (challengeStage === 2) {
-    challengeGoalEl.textContent = '第 2 关：向下拖拽褪下左右腿的丝袜（过膝以下）';
-  } else if (challengeStage === 3) {
-    challengeGoalEl.textContent = '第 3 关：拉住裙摆蝴蝶结丝带尾端向外下拉解开';
-  } else {
-    challengeGoalEl.textContent = '🎉 全部 3 关通关！点击「重玩」或切换自由模式';
-  }
-}
-
-function startChallengeMode() {
-  challengeStage = 1;
-  prevSockLRemoved = false;
-  prevSockRRemoved = false;
-  leftOuterSock.reset();
-  rightOuterSock.reset();
-  if (sculpted) sculpted.repair();
-  ribbonBow.reset();
-
-  outerSockGroup.visible = true;
-  ribbonBow.group.visible = true;
-  challengeHud.classList.remove('hidden');
-
-  updateChallengeHUD(0);
-  switchView('stage1Socks');
-  showToast('闯关开始！第 1 关：先脱掉左右腿针织短袜');
-}
-
 function setMode(mode) {
-  if (interactionMode === mode && mode !== 'challenge') return;
+  if (interactionMode === mode) return;
   interactionMode = mode;
   isDragging = false;
   isHandPinned = false;
   gloveHand.setPinned(false);
-  activeOuterSock = null;
-  activeRibbonPull = false;
   activeRollSide = 0;
   if (sculpted) sculpted.releaseGrab();
 
-  document.getElementById('btn-mode-challenge').classList.toggle('active', mode === 'challenge');
   document.getElementById('btn-mode-tear').classList.toggle('active', mode === 'tear');
   document.getElementById('btn-mode-roll').classList.toggle('active', mode === 'roll');
-
-  if (mode === 'challenge') {
-    startChallengeMode();
-  } else {
-    challengeHud.classList.add('hidden');
-    outerSockGroup.visible = false;
-    ribbonBow.group.visible = false;
-    switchView('view01');
-    showToast(
-      mode === 'roll'
-        ? '脱袜子模式：左键向下拖拽即可将丝袜卷边褪下（左右腿独立）'
-        : '撕裂 / 勾丝模式：左键拉扯即可产生褶皱、杏仁破口与纵向抽丝'
-    );
-  }
+  showToast(
+    mode === 'roll'
+      ? '脱袜子模式：左键向下拖拽即可将丝袜卷边褪下'
+      : '撕裂 / 勾丝模式：左键捏住丝袜拉扯即可起皱、撕开破口与抽丝'
+  );
 }
 
-document.getElementById('btn-mode-challenge').addEventListener('click', () => setMode('challenge'));
 document.getElementById('btn-mode-tear').addEventListener('click', () => setMode('tear'));
 document.getElementById('btn-mode-roll').addEventListener('click', () => setMode('roll'));
-document.getElementById('btn-challenge-restart').addEventListener('click', () => {
-  if (interactionMode === 'challenge') startChallengeMode();
-});
 
 function togglePinHand() {
   if (isHandPinned) {
@@ -496,19 +326,16 @@ function setColorMode(mode) {
     u.uFabricSheenColor.value.setRGB(0.86, 0.88, 0.92);
     u.uFrostCoverage.value = 0.68;
   } else if (mode === 'purple') {
-    // 🍇 葡萄紫 — glossy sheer candy-jelly grape violet
     u.uColorMode.value = 0.72;
     u.uFabricBaseColor.value.setRGB(0.26, 0.07, 0.38);
     u.uFabricSheenColor.value.setRGB(0.76, 0.44, 0.95);
     u.uFrostCoverage.value = 0.54;
   } else if (mode === 'pink') {
-    // 🍑 蜜桃粉 — glossy sheer candy-jelly peach pink
     u.uColorMode.value = 0.78;
     u.uFabricBaseColor.value.setRGB(0.62, 0.14, 0.28);
     u.uFabricSheenColor.value.setRGB(0.98, 0.52, 0.68);
     u.uFrostCoverage.value = 0.52;
   } else if (mode === 'green') {
-    // 🍏 青苹果 — glossy sheer candy-jelly green apple
     u.uColorMode.value = 0.76;
     u.uFabricBaseColor.value.setRGB(0.18, 0.44, 0.10);
     u.uFabricSheenColor.value.setRGB(0.62, 0.92, 0.38);
@@ -589,43 +416,43 @@ for (const [id, valId, apply, decimals] of sliderBindings) {
 const PRESETS = {
   matteBlack: {
     color: 'black',
-    'sl-frost-cov': 0.83,
+    'sl-frost-cov': 0.80,
     'sl-frost-clear': 1.0,
     'sl-frost-smooth': 0.85,
     'sl-pearl-strength': 0.32,
     'sl-pearl-spec': 0.52,
-    'sl-glint-strength': 0.72,
-    'sl-glint-density': 0.10,
+    'sl-glint-strength': 0.65,
+    'sl-glint-density': 0.09,
   },
   pearlBlack: {
     color: 'black',
-    'sl-frost-cov': 0.72,
+    'sl-frost-cov': 0.68,
     'sl-frost-clear': 1.15,
     'sl-frost-smooth': 0.94,
     'sl-pearl-strength': 0.82,
     'sl-pearl-spec': 1.12,
-    'sl-glint-strength': 1.35,
-    'sl-glint-density': 0.20,
+    'sl-glint-strength': 1.25,
+    'sl-glint-density': 0.16,
   },
   sheer20d: {
-    color: 'black',
-    'sl-frost-cov': 0.38,
+    color: 'purple',
+    'sl-frost-cov': 0.48,
     'sl-frost-clear': 1.25,
-    'sl-frost-smooth': 0.80,
-    'sl-pearl-strength': 0.45,
-    'sl-pearl-spec': 0.68,
-    'sl-glint-strength': 0.90,
-    'sl-glint-density': 0.14,
+    'sl-frost-smooth': 0.92,
+    'sl-pearl-strength': 0.62,
+    'sl-pearl-spec': 0.95,
+    'sl-glint-strength': 0.50,
+    'sl-glint-density': 0.08,
   },
   milkWhite: {
     color: 'white',
-    'sl-frost-cov': 0.76,
+    'sl-frost-cov': 0.72,
     'sl-frost-clear': 0.95,
     'sl-frost-smooth': 0.82,
     'sl-pearl-strength': 0.48,
     'sl-pearl-spec': 0.62,
-    'sl-glint-strength': 0.80,
-    'sl-glint-density': 0.12,
+    'sl-glint-strength': 0.60,
+    'sl-glint-density': 0.09,
   },
 };
 
@@ -655,6 +482,7 @@ glbInput.addEventListener('change', async (e) => {
     customModelRoot = model;
     scene.add(customModelRoot);
     characterGroup.visible = false;
+    roomProps.visible = false;
     resetModelBtn.classList.remove('hidden');
     showToast(`已导入 ${file.name}`);
   } catch (err) {
@@ -670,8 +498,9 @@ resetModelBtn.addEventListener('click', () => {
     customModelRoot = null;
   }
   characterGroup.visible = true;
+  roomProps.visible = true;
   resetModelBtn.classList.add('hidden');
-  showToast('已恢复内置精雕 3D 腿部模型');
+  showToast('已恢复坐姿精雕 3D 场景');
 });
 
 window.addEventListener('resize', () => {
@@ -704,111 +533,7 @@ function animate() {
     sculpted.step(dt);
   }
 
-  if (outerSockGroup.visible) {
-    leftOuterSock.step(dt);
-    rightOuterSock.step(dt);
-    if (leftOuterSock.removed && !prevSockLRemoved) {
-      prevSockLRemoved = true;
-      foley.playPop();
-    }
-    if (rightOuterSock.removed && !prevSockRRemoved) {
-      prevSockRRemoved = true;
-      foley.playPop();
-    }
-  }
-  if (ribbonBow.group.visible) {
-    ribbonBow.updateVisuals(clock.elapsedTime, dt);
-  }
-
-  // Stage Challenge Progression Logic
-  if (interactionMode === 'challenge' && sculpted) {
-    const pulse = 1.0 + Math.sin(clock.elapsedTime * 5.0) * 0.16;
-    guideRing.scale.setScalar(pulse);
-    guideRing.quaternion.copy(camera.quaternion);
-
-    if (challengeStage === 1) {
-      const p1 = (leftOuterSock.getProgress() + rightOuterSock.getProgress()) * 0.5;
-      updateChallengeHUD(p1);
-      if (!isDragging) {
-        const targetSock = !rightOuterSock.removed ? rightOuterSock : leftOuterSock;
-        if (!targetSock.removed) {
-          guideRing.visible = true;
-          guideRing.position.set(targetSock.side * 0.30, targetSock.cuffY - 0.04, 0.18);
-        }
-      } else {
-        guideRing.visible = false;
-      }
-
-      if (leftOuterSock.removed && rightOuterSock.removed) {
-        challengeStage = 2;
-        activeOuterSock = null;
-        isDragging = false;
-        updateChallengeHUD(0);
-        switchView('view01');
-        foley.playStageClear(false);
-        showToast('✅ 第 1 关通过！解锁第 2 关：褪下双腿丝袜');
-      }
-    } else if (challengeStage === 2) {
-      const rollRange = 0.64 - (-0.72);
-      const pL = Math.max(0, Math.min(1, (0.64 - sculpted.cuffY['-1']) / rollRange));
-      const pR = Math.max(0, Math.min(1, (0.64 - sculpted.cuffY['1']) / rollRange));
-      updateChallengeHUD((pL + pR) * 0.5);
-
-      if (!isDragging) {
-        const side = pR < 0.92 ? 1 : -1;
-        const cY = sculpted.cuffY[String(side)];
-        guideRing.visible = true;
-        guideRing.position.set(side * 0.32, Math.min(0.28, cY - 0.08), 0.22);
-      } else {
-        guideRing.visible = false;
-      }
-
-      if (pL >= 0.92 && pR >= 0.92) {
-        challengeStage = 3;
-        activeRollSide = 0;
-        isDragging = false;
-        updateChallengeHUD(0);
-        switchView('stage3Ribbon');
-        foley.playStageClear(false);
-        showToast('✅ 第 2 关通过！解锁第 3 关：解开裙摆蝴蝶结');
-      }
-    } else if (challengeStage === 3) {
-      updateChallengeHUD(ribbonBow.untieProgress);
-      if (!isDragging && !ribbonBow.untied) {
-        guideRing.visible = true;
-        guideRing.position.set(0.09, 0.52, 0.46);
-      } else {
-        guideRing.visible = false;
-      }
-
-      if (ribbonBow.untied) {
-        challengeStage = 4;
-        activeRibbonPull = false;
-        isDragging = false;
-        guideRing.visible = false;
-        updateChallengeHUD(1);
-        switchView('view01');
-        foley.playPop();
-        foley.playStageClear(true);
-        showToast('🎉 恭喜全部 3 关通关！');
-      }
-    } else {
-      guideRing.visible = false;
-    }
-  } else {
-    guideRing.visible = false;
-  }
-
-  // Update Glove Hand & Pinch Wrinkles
-  if (activeOuterSock && isDragging) {
-    activeOuterSock.getHandlePoint(_grabWorldPos);
-    computeOutwardNormal(_grabWorldPos, _outNormal);
-    gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
-  } else if (activeRibbonPull && isDragging) {
-    ribbonBow.getHandleWorldPos(_grabWorldPos);
-    _outNormal.set(0.2, 0.0, 1.0).normalize();
-    gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
-  } else if (sculpted && activeRollSide !== 0 && isDragging) {
+  if (sculpted && activeRollSide !== 0 && isDragging) {
     sculpted.getCuffHandlePoint(activeRollSide, _grabWorldPos);
     computeOutwardNormal(_grabWorldPos, _outNormal);
     gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);

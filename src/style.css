@@ -32,28 +32,41 @@ body {
   cursor: none;
 }
 
-/* Top-center Mode Switcher */
-.mode-bar {
+/* Responsive Top Toolbar (never overlaps on narrow windows!) */
+.top-bar {
   position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 14px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  z-index: 22;
+  pointer-events: none;
+}
+
+.top-bar > * {
+  pointer-events: auto;
+}
+
+.mode-bar {
   display: flex;
   padding: 3px;
   gap: 3px;
-  background: rgba(12, 20, 26, 0.72);
-  border: 1px solid rgba(175, 210, 232, 0.22);
+  background: rgba(24, 18, 14, 0.72);
+  border: 1px solid rgba(245, 222, 198, 0.24);
   border-radius: 6px;
   backdrop-filter: blur(10px);
-  z-index: 22;
 }
 
 .mode-btn {
-  padding: 6px 14px;
+  padding: 6px 13px;
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: rgba(220, 232, 242, 0.78);
+  color: rgba(244, 232, 220, 0.80);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -66,8 +79,14 @@ body {
 }
 
 .mode-btn.active {
-  background: #507898;
+  background: #8a44ba;
   color: #ffffff;
+}
+
+.top-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* Stage Challenge HUD */
@@ -169,15 +188,7 @@ body {
   background: rgba(80, 120, 152, 0.55);
 }
 
-/* Top-right controls */
-.top-controls {
-  position: fixed;
-  top: 16px;
-  right: 18px;
-  display: flex;
-  gap: 8px;
-  z-index: 22;
-}
+/* (top-controls now lives inside responsive .top-bar above) */
 
 .pill-btn {
   display: inline-flex;

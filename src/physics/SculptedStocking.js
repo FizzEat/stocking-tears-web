@@ -2,30 +2,42 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MAX_SDF_TEARS } from '../shaders/stockingShader.js';
 
-const FLOOR_Y = -1.685;
-const STOCKING_TOP_Y = 0.64;
+const FLOOR_Y = 0.0;
+const STOCKING_TOP_Y = 0.72;
 
 /**
- * Loads the real sculpted CC0 MakeHuman female legs & delicate 5-toe feet (.glb)
+ * Loads the posed seated female legs & delicate 5-toe feet (./models/seated_legs.glb)
  * and builds:
- *   1. Sculpted Skin Mesh (with dynamic SDF raised-skin bulge & warm rim AO)
+ *   1. Sculpted Seated Skin Mesh (with dynamic SDF raised-skin bulge & warm rim AO)
  *   2. Surface-Hugging Interactive Sheer Stocking Mesh (real-time elastic pinch/pull
  *      spring physics, per-pixel analytical almond SDF tears & vertical ladders,
  *      and independent left/right Roll-Down cuff bunching!)
+ *   3. Tailored DarkShorts mesh covering the seated hips/pelvis cleanly
  */
 export async function loadSculptedLegsAndStockings(skinMaterial, stockingMaterial) {
   const loader = new GLTFLoader();
-  const gltf = await loader.loadAsync('./models/sculpted_legs.glb');
+  const gltf = await loader.loadAsync('./models/seated_legs.glb');
 
   let sourceGeom = null;
+  let shortsGeom = null;
   gltf.scene.traverse((obj) => {
-    if (obj.isMesh && !sourceGeom) {
-      sourceGeom = obj.geometry;
+    if (obj.isMesh) {
+      if (obj.name.includes('SeatedLegsSkin') || obj.name.includes('morphed_female.001')) {
+        sourceGeom = obj.geometry;
+      } else if (obj.name.includes('DarkShorts') || obj.name.includes('morphed_female.002')) {
+        shortsGeom = obj.geometry;
+      }
     }
   });
+  // Fallback if exporter renamed meshes
+  if (!sourceGeom) {
+    gltf.scene.traverse((obj) => {
+      if (obj.isMesh && !sourceGeom) sourceGeom = obj.geometry;
+    });
+  }
 
   if (!sourceGeom) {
-    throw new Error('No mesh found in sculpted_legs.glb');
+    throw new Error('No mesh found in seated_legs.glb');
   }
 
   // Ensure smooth vertex normals
@@ -94,8 +106,8 @@ export async function loadSculptedLegsAndStockings(skinMaterial, stockingMateria
     const nz = cNorm[i3 + 2];
     const y = cPos[i3 + 1];
 
-    // Slightly tighter clearance on the delicate toes (+1.4mm) so 5 toes read crisply!
-    const clearance = y < -1.52 ? 0.0014 : 0.0024;
+    // Slightly tighter clearance on the delicate toes (+1.2mm) so 5 toes read crisply!
+    const clearance = y < 0.14 ? 0.0012 : 0.0020;
     const rx = cPos[i3] + nx * clearance;
     const ry = cPos[i3 + 1] + ny * clearance;
     const rz = cPos[i3 + 2] + nz * clearance;
@@ -120,6 +132,19 @@ export async function loadSculptedLegsAndStockings(skinMaterial, stockingMateria
   const clothMesh = new THREE.Mesh(clothGeom, stockingMaterial);
   clothMesh.renderOrder = 2;
 
+  let shortsMesh = null;
+  if (shortsGeom) {
+    shortsGeom.computeVertexNormals();
+    const shortsMat = new THREE.MeshStandardMaterial({
+      color: '#1b1d22',
+      roughness: 0.78,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    shortsMesh = new THREE.Mesh(shortsGeom, shortsMat);
+    shortsMesh.renderOrder = 3;
+  }
+
   // Interactive controller wrapping both legs on the sculpted mesh
   const controller = new SculptedStockingController({
     skinMesh,
@@ -130,6 +155,7 @@ export async function loadSculptedLegsAndStockings(skinMaterial, stockingMateria
     skinRimAO,
     clothMesh,
     clothGeom,
+    shortsMesh,
     restPos,
     restNorm,
     vel,
@@ -202,7 +228,7 @@ export class SculptedStockingController {
   pullCuff(side, worldY) {
     const key = String(side);
     this.rollSide = side;
-    this.targetCuffY[key] = Math.max(-1.42, Math.min(STOCKING_TOP_Y, worldY));
+    this.targetCuffY[key] = Math.max(0.06, Math.min(STOCKING_TOP_Y, worldY));
   }
 
   releaseCuff() {
