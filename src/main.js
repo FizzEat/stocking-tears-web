@@ -4,7 +4,10 @@ import { createStudioFloor } from './scene/FootGeometry.js';
 import { createRoomProps } from './scene/RoomProps.js';
 import { createSkinMaterial } from './shaders/skinShader.js';
 import { createStockingMaterial } from './shaders/stockingShader.js';
-import { loadSculptedLegsAndStockings } from './physics/SculptedStocking.js';
+import {
+  loadSculptedLegsAndStockings,
+  buildStockingForImportedModel,
+} from './physics/SculptedStocking.js';
 import { GloveHand } from './scene/GloveHand.js';
 import { loadCustomGLB } from './scene/ModelLoader.js';
 import { FoleyAudio } from './audio/FoleyAudio.js';
@@ -143,6 +146,11 @@ gloveHand.group.scale.setScalar(0.46);
 scene.add(gloveHand.group);
 
 let customModelRoot = null;
+let customStockingCtrl = null;
+
+function getActiveController() {
+  return customStockingCtrl || sculpted;
+}
 
 // ---------------------------------------------------------------------------
 // 4. Interaction State ('tear' | 'roll')
@@ -173,9 +181,10 @@ function updatePointerNDC(event) {
 }
 
 function raycastCloth() {
-  if (!sculpted || !characterGroup.visible) return null;
+  const ctrl = getActiveController();
+  if (!ctrl) return null;
   raycaster.setFromCamera(pointerNDC, camera);
-  const hits = raycaster.intersectObject(sculpted.clothMesh, false);
+  const hits = raycaster.intersectObject(ctrl.clothMesh, false);
   return hits.length > 0 ? hits[0] : null;
 }
 
@@ -189,15 +198,16 @@ function computeOutwardNormal(worldPos, out = new THREE.Vector3()) {
 renderer.domElement.addEventListener('pointermove', (e) => {
   updatePointerNDC(e);
 
-  if (isDragging && sculpted) {
+  const ctrl = getActiveController();
+  if (isDragging && ctrl) {
     raycaster.setFromCamera(pointerNDC, camera);
     if (raycaster.ray.intersectPlane(dragPlane, dragIntersect)) {
       if (activeRollSide !== 0) {
-        sculpted.pullCuff(activeRollSide, dragIntersect.y + rollDragOffsetY);
+        ctrl.pullCuff(activeRollSide, dragIntersect.y + rollDragOffsetY);
         foley.playFabricSlide(0.6);
-      } else if (sculpted.isGrabbing) {
-        dragIntersect.y = Math.max(0.02, Math.min(0.92, dragIntersect.y));
-        sculpted.setGrabTarget(dragIntersect);
+      } else if (ctrl.isGrabbing) {
+        dragIntersect.y = Math.max(0.02, Math.min(0.95, dragIntersect.y));
+        ctrl.setGrabTarget(dragIntersect);
       }
     }
     return;
@@ -222,10 +232,11 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   updatePointerNDC(e);
 
   const hit = raycastCloth();
-  if (!hit || !sculpted) return;
+  const ctrl = getActiveController();
+  if (!hit || !ctrl) return;
 
   if (isHandPinned) {
-    sculpted.releaseGrab();
+    ctrl.releaseGrab();
     isHandPinned = false;
     gloveHand.setPinned(false);
   }
@@ -236,12 +247,12 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 
   if (interactionMode === 'roll') {
     activeRollSide = hit.point.x < 0 ? -1 : 1;
-    rollDragOffsetY = sculpted.cuffY[String(activeRollSide)] - hit.point.y;
-    sculpted.pullCuff(activeRollSide, sculpted.cuffY[String(activeRollSide)]);
+    rollDragOffsetY = ctrl.cuffY[String(activeRollSide)] - hit.point.y;
+    ctrl.pullCuff(activeRollSide, ctrl.cuffY[String(activeRollSide)]);
     isDragging = true;
     container.classList.add('grabbing');
     gloveHand.setVisible(true);
-  } else if (sculpted.grabAtHit(hit)) {
+  } else if (ctrl.grabAtHit(hit)) {
     isDragging = true;
     container.classList.add('grabbing');
     gloveHand.setVisible(true);
@@ -253,12 +264,13 @@ function endDrag() {
   isDragging = false;
   container.classList.remove('grabbing');
 
-  if (activeRollSide !== 0 && sculpted) {
-    sculpted.releaseCuff();
+  const ctrl = getActiveController();
+  if (activeRollSide !== 0 && ctrl) {
+    ctrl.releaseCuff();
     activeRollSide = 0;
   }
-  if (!isHandPinned && sculpted && sculpted.isGrabbing) {
-    sculpted.releaseGrab();
+  if (!isHandPinned && ctrl && ctrl.isGrabbing) {
+    ctrl.releaseGrab();
   }
 }
 
@@ -282,18 +294,19 @@ document.getElementById('btn-mode-tear').addEventListener('click', () => {
 });
 
 function togglePinHand() {
+  const ctrl = getActiveController();
   if (isHandPinned) {
     isHandPinned = false;
     gloveHand.setPinned(false);
-    if (!isDragging && sculpted) sculpted.releaseGrab();
+    if (!isDragging && ctrl) ctrl.releaseGrab();
     if (!isHoveringCloth) gloveHand.setVisible(false);
-    showToast('已松开手部');
-  } else if (sculpted && sculpted.isGrabbing) {
+    showToast('已松开小猫爪');
+  } else if (ctrl && ctrl.isGrabbing) {
     isHandPinned = true;
     gloveHand.setPinned(true);
-    showToast('已固定手部（可右键旋转视角观察，按 1 松开）');
+    showToast('已固定小猫爪（可右键旋转视角观察，按 1 松开）');
   } else {
-    showToast('请先用左键拉住丝袜，再按 1 固定手部');
+    showToast('请先用左键拉住丝袜，再按 1 固定');
   }
 }
 
@@ -301,8 +314,9 @@ function repairAllTears() {
   isHandPinned = false;
   isDragging = false;
   gloveHand.setPinned(false);
-  if (sculpted) sculpted.repair();
-  showToast('已还原所有破损并穿回丝袜');
+  const ctrl = getActiveController();
+  if (ctrl) ctrl.repair();
+  showToast('已还原所有破损');
 }
 
 function setColorMode(mode) {
@@ -374,8 +388,8 @@ const sliderBindings = [
   ['sl-weave-contrast', 'val-weave-contrast', (v) => (stockingMaterial.uniforms.uWeaveContrast.value = v), 3],
   ['sl-wrinkle', 'val-wrinkle', (v) => (stockingMaterial.uniforms.uWrinkleStrength.value = v), 2],
   ['sl-tension-boost', 'val-tension-boost', (v) => (stockingMaterial.uniforms.uTensionNormalBoost.value = v), 2],
-  ['slider-tear', 'val-tear', (v) => { if (sculpted) sculpted.tearSensitivity = v; }, 2],
-  ['slider-bulge', 'val-bulge', (v) => { if (sculpted) sculpted.bulgeStrength = v; }, 2],
+  ['slider-tear', 'val-tear', (v) => { const c = getActiveController(); if (c) c.tearSensitivity = v; }, 2],
+  ['slider-bulge', 'val-bulge', (v) => { const c = getActiveController(); if (c) c.bulgeStrength = v; }, 2],
   ['sl-pearl-strength', 'val-pearl-strength', (v) => (stockingMaterial.uniforms.uPearlStrength.value = v), 2],
   ['sl-pearl-scale', 'val-pearl-scale', (v) => (stockingMaterial.uniforms.uPearlGrainScale.value = v), 0],
   ['sl-pearl-spec', 'val-pearl-spec', (v) => (stockingMaterial.uniforms.uPearlSpecularStrength.value = v), 2],
@@ -466,20 +480,37 @@ glbInput.addEventListener('change', async (e) => {
     showToast(`正在加载 ${file.name} ...`);
     const model = await loadCustomGLB(file);
     if (customModelRoot) scene.remove(customModelRoot);
+    if (customStockingCtrl) {
+      scene.remove(customStockingCtrl.clothMesh);
+      customStockingCtrl = null;
+    }
     customModelRoot = model;
     scene.add(customModelRoot);
     characterGroup.visible = false;
     roomProps.visible = false;
     resetModelBtn.classList.remove('hidden');
-    // Smoothly frame the newly imported full-body 3D model!
+
+    // Automatically wrap real-time tearable sheer stockings onto the imported character's legs!
+    customStockingCtrl = buildStockingForImportedModel(customModelRoot, stockingMaterial);
+    if (customStockingCtrl) {
+      customStockingCtrl.onTear = () => foley.playTearSnap(1.0);
+      customStockingCtrl.repair();
+      scene.add(customStockingCtrl.clothMesh);
+    }
+
+    // Frame straight onto the imported character's legs!
     cameraTransition = {
       startPos: camera.position.clone(),
       startTarget: controls.target.clone(),
-      endPos: new THREE.Vector3(0.0, 0.95, 2.85),
-      endTarget: new THREE.Vector3(0.0, 0.85, 0.0),
+      endPos: new THREE.Vector3(0.0, 0.56, 1.55),
+      endTarget: new THREE.Vector3(0.0, 0.50, 0.0),
       t: 0,
     };
-    showToast(`已导入 ${file.name}（右键可 360° 旋转观察）`);
+    showToast(
+      customStockingCtrl
+        ? `已导入 ${file.name} 并自动穿上可撕裂丝袜！直接左键开撕`
+        : `已导入 ${file.name}`
+    );
   } catch (err) {
     console.error(err);
     showToast('模型加载失败，请确认是有效的 .glb / .gltf 文件');
@@ -492,10 +523,16 @@ resetModelBtn.addEventListener('click', () => {
     scene.remove(customModelRoot);
     customModelRoot = null;
   }
+  if (customStockingCtrl) {
+    scene.remove(customStockingCtrl.clothMesh);
+    customStockingCtrl = null;
+  }
   characterGroup.visible = true;
   roomProps.visible = true;
+  if (sculpted) sculpted.repair();
   resetModelBtn.classList.add('hidden');
-  showToast('已恢复坐姿精雕 3D 场景');
+  switchView('view01');
+  showToast('已恢复内置坐姿场景');
 });
 
 window.addEventListener('resize', () => {
@@ -524,16 +561,17 @@ function animate() {
 
   controls.update();
 
-  if (sculpted) {
-    sculpted.step(dt);
+  const ctrl = getActiveController();
+  if (ctrl) {
+    ctrl.step(dt);
   }
 
-  if (sculpted && activeRollSide !== 0 && isDragging) {
-    sculpted.getCuffHandlePoint(activeRollSide, _grabWorldPos);
+  if (ctrl && activeRollSide !== 0 && isDragging) {
+    ctrl.getCuffHandlePoint(activeRollSide, _grabWorldPos);
     computeOutwardNormal(_grabWorldPos, _outNormal);
     gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
-  } else if (sculpted && sculpted.isGrabbing && (isDragging || isHandPinned)) {
-    sculpted.getGrabPosition(_grabWorldPos);
+  } else if (ctrl && ctrl.isGrabbing && (isDragging || isHandPinned)) {
+    ctrl.getGrabPosition(_grabWorldPos);
     computeOutwardNormal(_grabWorldPos, _outNormal);
     gloveHand.updatePose(_grabWorldPos, _outNormal, true, dt);
 

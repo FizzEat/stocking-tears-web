@@ -191,6 +191,147 @@ export async function loadSculptedLegsAndStockings(skinMaterial, stockingMateria
   return controller;
 }
 
+/**
+ * Automatically extracts the leg region (above shoes, below skirt/shorts, excluding arms)
+ * from ANY imported .glb / .vrm character model and wraps a real-time tearable sheer
+ * stocking overlay seamlessly around her exact legs!
+ */
+export function buildStockingForImportedModel(root, stockingMaterial) {
+  root.updateMatrixWorld(true);
+
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const vA = new THREE.Vector3();
+  const vB = new THREE.Vector3();
+  const vC = new THREE.Vector3();
+  const nA = new THREE.Vector3();
+  const nB = new THREE.Vector3();
+  const nC = new THREE.Vector3();
+  const normalMat = new THREE.Matrix3();
+
+  // Normalized model height is ~1.68m (feet on y = 0.0):
+  // Legs live cleanly in y ∈ [0.065, 0.86] and |x| < 0.25 (excludes hanging arms/hands!)
+  const Y_MIN = 0.065;
+  const Y_MAX = 0.86;
+  const X_MAX = 0.25;
+
+  const isLegVert = (v) => v.y >= Y_MIN && v.y <= Y_MAX && Math.abs(v.x) <= X_MAX;
+
+  root.traverse((obj) => {
+    if (!obj.isMesh || !obj.geometry) return;
+    // Skip obvious shoes/skirt/accessories by name if present
+    const lname = (obj.name || '').toLowerCase();
+    if (lname.includes('shoe') || lname.includes('skirt') || lname.includes('hair') || lname.includes('face')) {
+      return;
+    }
+
+    const geom = obj.geometry;
+    const pos = geom.attributes.position;
+    if (!pos) return;
+    if (!geom.attributes.normal) geom.computeVertexNormals();
+    const norm = geom.attributes.normal;
+    const idx = geom.index;
+
+    normalMat.getNormalMatrix(obj.matrixWorld);
+
+    const triCount = idx ? idx.count / 3 : pos.count / 3;
+    for (let t = 0; t < triCount; t++) {
+      const i0 = idx ? idx.getX(t * 3) : t * 3;
+      const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+
+      vA.fromBufferAttribute(pos, i0).applyMatrix4(obj.matrixWorld);
+      vB.fromBufferAttribute(pos, i1).applyMatrix4(obj.matrixWorld);
+      vC.fromBufferAttribute(pos, i2).applyMatrix4(obj.matrixWorld);
+
+      if (!isLegVert(vA) || !isLegVert(vB) || !isLegVert(vC)) continue;
+
+      nA.fromBufferAttribute(norm, i0).applyMatrix3(normalMat).normalize();
+      nB.fromBufferAttribute(norm, i1).applyMatrix3(normalMat).normalize();
+      nC.fromBufferAttribute(norm, i2).applyMatrix3(normalMat).normalize();
+
+      const triVerts = [
+        [vA, nA],
+        [vB, nB],
+        [vC, nC],
+      ];
+      const cx = (vA.x + vB.x + vC.x) / 3 < 0 ? -0.105 : 0.105;
+
+      for (const [v, n] of triVerts) {
+        // Inflate +2.4mm outward along skin normal so stocking hugs seamlessly over imported legs
+        positions.push(v.x + n.x * 0.0024, v.y + n.y * 0.0024, v.z + n.z * 0.0024);
+        normals.push(n.x, n.y, n.z);
+
+        const theta = Math.atan2(v.z, v.x - cx);
+        const u = ((theta / (Math.PI * 2)) % 1 + 1) % 1;
+        const vCoord = Math.max(0, Math.min(1, (v.y - Y_MIN) / (Y_MAX - Y_MIN)));
+        uvs.push(u, vCoord);
+      }
+    }
+  });
+
+  if (positions.length === 0) return null;
+
+  const vertCount = positions.length / 3;
+  const clothGeom = new THREE.BufferGeometry();
+  const posArr = new Float32Array(positions);
+  const normArr = new Float32Array(normals);
+  const uvArr = new Float32Array(uvs);
+
+  const restPos = new Float32Array(posArr);
+  const restNorm = new Float32Array(normArr);
+  const vel = new Float32Array(vertCount * 3);
+  const sideArr = new Int8Array(vertCount);
+  for (let i = 0; i < vertCount; i++) {
+    sideArr[i] = posArr[i * 3] < 0 ? -1 : 1;
+  }
+
+  const strainArr = new Float32Array(vertCount);
+  const liftArr = new Float32Array(vertCount);
+  const bunchArr = new Float32Array(vertCount);
+
+  clothGeom.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+  clothGeom.setAttribute('normal', new THREE.BufferAttribute(normArr, 3));
+  clothGeom.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
+  clothGeom.setAttribute('aStrain', new THREE.BufferAttribute(strainArr, 1));
+  clothGeom.setAttribute('aLift', new THREE.BufferAttribute(liftArr, 1));
+  clothGeom.setAttribute('aTearEdge', new THREE.BufferAttribute(new Float32Array(vertCount), 1));
+  clothGeom.setAttribute('aTearOpen', new THREE.BufferAttribute(new Float32Array(vertCount), 1));
+  clothGeom.setAttribute('aLadder', new THREE.BufferAttribute(new Float32Array(vertCount), 1));
+  clothGeom.setAttribute('aBunch', new THREE.BufferAttribute(bunchArr, 1));
+
+  const clothMesh = new THREE.Mesh(clothGeom, stockingMaterial);
+  clothMesh.renderOrder = 5;
+
+  // Dummy skin arrays (imported model already renders its own skin underneath!)
+  const controller = new SculptedStockingController({
+    skinMesh: null,
+    skinGeom: null,
+    skinRestPos: null,
+    skinRestNorm: null,
+    skinBulge: null,
+    skinRimAO: null,
+    clothMesh,
+    clothGeom,
+    restPos,
+    restNorm,
+    vel,
+    sideArr,
+    uvArr,
+    strainArr,
+    liftArr,
+    bunchArr,
+    material: stockingMaterial,
+    leftFootCenter: new THREE.Vector2(-0.10, 0),
+    rightFootCenter: new THREE.Vector2(0.10, 0),
+    bbox: null,
+  });
+
+  clothMesh.userData.sculptedController = controller;
+  return controller;
+}
+
 export class SculptedStockingController {
   constructor(data) {
     Object.assign(this, data);
@@ -271,13 +412,15 @@ export class SculptedStockingController {
     this.clothGeom.attributes.position.needsUpdate = true;
     this.clothGeom.computeVertexNormals();
 
-    this.skinBulge.fill(0);
-    this.skinRimAO.fill(0);
-    this.skinGeom.attributes.position.array.set(this.skinRestPos);
-    this.skinGeom.attributes.position.needsUpdate = true;
-    this.skinGeom.attributes.aBulge.needsUpdate = true;
-    this.skinGeom.attributes.aRimAO.needsUpdate = true;
-    this.skinGeom.computeVertexNormals();
+    if (this.skinGeom && this.skinBulge) {
+      this.skinBulge.fill(0);
+      this.skinRimAO.fill(0);
+      this.skinGeom.attributes.position.array.set(this.skinRestPos);
+      this.skinGeom.attributes.position.needsUpdate = true;
+      this.skinGeom.attributes.aBulge.needsUpdate = true;
+      this.skinGeom.attributes.aRimAO.needsUpdate = true;
+      this.skinGeom.computeVertexNormals();
+    }
 
     this._syncTearUniforms();
   }
@@ -470,7 +613,7 @@ export class SculptedStockingController {
   }
 
   _updateSkinBulge() {
-    if (this.sdfTears.length === 0) return;
+    if (!this.skinGeom || !this.skinBulge || this.sdfTears.length === 0) return;
     const sPos = this.skinGeom.attributes.position.array;
     const maxDisp = 0.004 * this.bulgeStrength;
 
